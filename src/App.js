@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import MemoForm from './components/MemoForm';
 import MemoList from './components/MemoList';
+import Timeline from './components/Timeline';
 
 export default function App() {
   const [memos, setMemos] = useState([]);
@@ -8,6 +9,7 @@ export default function App() {
   const [editingMemo, setEditingMemo] = useState(null);
   const [filter, setFilter] = useState('all'); // all | active | completed
   const [reminder, setReminder] = useState(null);
+  const [view, setView] = useState('list'); // list | timeline
 
   const loadMemos = useCallback(async () => {
     const data = await window.api.getMemos();
@@ -77,20 +79,36 @@ export default function App() {
         </div>
         <div className="header-actions">
           <div className="filter-tabs">
+            <button
+              className={`filter-btn ${view === 'list' ? 'active' : ''}`}
+              onClick={() => setView('list')}
+            >
+              列表
+            </button>
+            <button
+              className={`filter-btn ${view === 'timeline' ? 'active' : ''}`}
+              onClick={() => setView('timeline')}
+            >
+              时间轴
+            </button>
+          </div>
+          <button className="add-btn" onClick={() => { setEditingMemo(null); setShowForm(true); }}>
+            + 新建
+          </button>
+        </div>
+        {view === 'list' && (
+          <div className="sub-filter">
             {['all', 'active', 'completed'].map((f) => (
               <button
                 key={f}
-                className={`filter-btn ${filter === f ? 'active' : ''}`}
+                className={`sub-filter-btn ${filter === f ? 'active' : ''}`}
                 onClick={() => setFilter(f)}
               >
                 {f === 'all' ? '全部' : f === 'active' ? '待办' : '已完成'}
               </button>
             ))}
           </div>
-          <button className="add-btn" onClick={() => { setEditingMemo(null); setShowForm(true); }}>
-            + 新建
-          </button>
-        </div>
+        )}
       </header>
 
       {showForm && (
@@ -105,18 +123,27 @@ export default function App() {
         </div>
       )}
 
-      <MemoList
-        memos={filteredMemos}
-        onToggle={handleToggle}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
-
-      {filteredMemos.length === 0 && (
-        <div className="empty-state">
-          <div className="empty-icon">📝</div>
-          <p>{filter === 'all' ? '暂无备忘录，点击「+ 新建」添加' : '该分类下暂无内容'}</p>
-        </div>
+      {view === 'list' ? (
+        <>
+          <MemoList
+            memos={filteredMemos}
+            onToggle={handleToggle}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+          {filteredMemos.length === 0 && (
+            <div className="empty-state">
+              <div className="empty-icon">📝</div>
+              <p>{filter === 'all' ? '暂无备忘录，点击「+ 新建」添加' : '该分类下暂无内容'}</p>
+            </div>
+          )}
+        </>
+      ) : (
+        <Timeline
+          memos={memos}
+          onToggle={handleToggle}
+          onEdit={handleEdit}
+        />
       )}
 
       {reminder && (

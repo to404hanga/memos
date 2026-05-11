@@ -117,6 +117,122 @@ function loadAllReminders() {
   memos.forEach((memo) => scheduleReminder(memo));
 }
 
+function initMockData() {
+  const memos = store.get('memos', []);
+  if (memos.length > 0) return; // 已有数据则跳过
+
+  const now = new Date();
+  const h = (hours) => new Date(now.getTime() + hours * 3600000).toISOString();
+  const d = (days, hour = 10) => {
+    const date = new Date(now);
+    date.setDate(date.getDate() + days);
+    date.setHours(hour, 0, 0, 0);
+    return date.toISOString();
+  };
+
+  const mockMemos = [
+    {
+      id: uuidv4(),
+      title: '团队周会',
+      content: '讨论本周开发进度和下周计划',
+      reminderTime: h(0.5),
+      completed: false,
+      createdAt: h(-2),
+    },
+    {
+      id: uuidv4(),
+      title: '提交周报',
+      content: '汇总本周工作内容，发送给主管',
+      reminderTime: h(1.5),
+      completed: false,
+      createdAt: h(-5),
+    },
+    {
+      id: uuidv4(),
+      title: '回复客户邮件',
+      content: '关于 V2.0 版本需求确认',
+      reminderTime: h(-1),
+      completed: false,
+      createdAt: h(-24),
+    },
+    {
+      id: uuidv4(),
+      title: '代码审查',
+      content: '审查小王提交的登录模块 PR',
+      reminderTime: d(1, 10),
+      completed: false,
+      createdAt: h(-3),
+    },
+    {
+      id: uuidv4(),
+      title: '预约牙医',
+      content: '下午 3 点，记得带医保卡',
+      reminderTime: d(1, 15),
+      completed: false,
+      createdAt: h(-48),
+    },
+    {
+      id: uuidv4(),
+      title: '准备技术分享 PPT',
+      content: '主题：微服务架构实践',
+      reminderTime: d(2, 9),
+      completed: false,
+      createdAt: h(-10),
+    },
+    {
+      id: uuidv4(),
+      title: '健身',
+      content: '腿部训练日',
+      reminderTime: d(2, 18),
+      completed: false,
+      createdAt: h(-1),
+    },
+    {
+      id: uuidv4(),
+      title: '缴纳水电费',
+      content: '',
+      reminderTime: d(5, 12),
+      completed: false,
+      createdAt: h(-72),
+    },
+    {
+      id: uuidv4(),
+      title: '买生日礼物',
+      content: '小李下周五生日',
+      reminderTime: d(7, 11),
+      completed: false,
+      createdAt: h(-24),
+    },
+    {
+      id: uuidv4(),
+      title: '整理书签收藏',
+      content: '',
+      reminderTime: null,
+      completed: false,
+      createdAt: h(-100),
+    },
+    {
+      id: uuidv4(),
+      title: '更新项目文档',
+      content: 'API 接口文档需要补充新增的 5 个端点',
+      reminderTime: h(-24),
+      completed: true,
+      createdAt: h(-72),
+    },
+    {
+      id: uuidv4(),
+      title: '修复登录页 Bug',
+      content: '验证码输入框在 Safari 上无法聚焦',
+      reminderTime: h(-48),
+      completed: true,
+      createdAt: h(-96),
+    },
+  ];
+
+  store.set('memos', mockMemos);
+  console.log(`[Mock] 已插入 ${mockMemos.length} 条示例数据`);
+}
+
 // IPC 通信
 ipcMain.handle('get-memos', () => {
   return store.get('memos', []);
@@ -179,6 +295,10 @@ ipcMain.handle('toggle-complete', (_, id) => {
 });
 
 app.whenReady().then(() => {
+  // 清除旧数据，重新插入 mock 数据以便预览
+  store.set('memos', []);
+  initMockData();
+
   createWindow();
   createTray();
   loadAllReminders();
