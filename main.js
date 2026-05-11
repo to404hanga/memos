@@ -4,6 +4,9 @@ const fs = require('fs');
 const initSqlJs = require('sql.js');
 const { v4: uuidv4 } = require('uuid');
 
+// 必须在 ready 之前设置，否则 Dock 标签不生效
+app.name = '备忘录';
+
 let db = null;
 let dbPath = '';
 let mainWindow = null;
@@ -106,12 +109,16 @@ function rowToMemo(row) {
 }
 
 // ===== 窗口 & 托盘 =====
+const iconPath = path.join(__dirname, 'assets', 'icon.png');
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1680,
     height: 1188,
     minWidth: 600,
     minHeight: 420,
+    title: '备忘录',
+    icon: iconPath,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
     backgroundColor: '#f5f5f7',
@@ -138,10 +145,9 @@ function createWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createEmpty();
-  tray = new Tray(icon);
-  tray.setTitle('📝');
-  tray.setToolTip('备忘录提醒');
+  const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 });
+  tray = new Tray(trayIcon);
+  tray.setToolTip('备忘录');
   const contextMenu = Menu.buildFromTemplate([
     { label: '打开备忘录', click: () => mainWindow && mainWindow.show() },
     { type: 'separator' },
@@ -343,6 +349,12 @@ ipcMain.handle('toggle-complete', (_, id) => {
 
 // ===== 应用生命周期 =====
 app.whenReady().then(async () => {
+  // 设置 Dock 图标和应用名
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(iconPath);
+    app.setName('备忘录');
+  }
+
   await initDatabase();
 
   createWindow();
