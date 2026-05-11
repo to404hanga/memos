@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import MarkdownView from './MarkdownView';
 
 export default function MemoItem({ memo, onToggle, onEdit, onDelete }) {
   const [showConfirm, setShowConfirm] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const formatTime = (isoStr) => {
     if (!isoStr) return null;
@@ -30,7 +32,6 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete }) {
     const now = new Date();
     if (memo.completed) return 'completed';
     if (d < now) return 'expired';
-    // 1小时内即将到期
     if (d - now < 3600000) return 'soon';
     return 'pending';
   };
@@ -49,24 +50,43 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete }) {
     completed: '#66bb6a',
   };
 
+  const hasRichContent = memo.content && (
+    memo.content.includes('![') ||
+    memo.content.includes('**') ||
+    memo.content.includes('# ') ||
+    memo.content.includes('`') ||
+    memo.content.includes('- ') ||
+    memo.content.includes('\n')
+  );
+
   return (
     <div className={`memo-item ${memo.completed ? 'completed' : ''}`}>
-      <div className="memo-main" onClick={() => onToggle(memo.id)}>
-        <div className={`checkbox ${memo.completed ? 'checked' : ''}`}>
+      <div className="memo-main">
+        <div className={`checkbox ${memo.completed ? 'checked' : ''}`} onClick={() => onToggle(memo.id)}>
           {memo.completed && '✓'}
         </div>
-        <div className="memo-content">
+        <div className="memo-content" onClick={() => hasRichContent ? setExpanded(!expanded) : onToggle(memo.id)}>
           <h3 className="memo-title">{memo.title}</h3>
-          {memo.content && <p className="memo-desc">{memo.content}</p>}
+          {memo.content && (
+            expanded ? (
+              <div className="memo-desc-rich">
+                <MarkdownView content={memo.content} />
+              </div>
+            ) : (
+              <p className="memo-desc">{memo.content.replace(/[#*`!\[\]()]/g, '').substring(0, 60)}{memo.content.length > 60 ? '...' : ''}</p>
+            )
+          )}
+          {hasRichContent && (
+            <button className="expand-btn" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
+              {expanded ? '收起' : '展开详情'}
+            </button>
+          )}
           {memo.reminderTime && (
             <div className="memo-reminder">
               <span className="reminder-icon">⏰</span>
               <span className="reminder-time">{formatTime(memo.reminderTime)}</span>
               {status && (
-                <span
-                  className="reminder-status"
-                  style={{ color: statusColors[status] }}
-                >
+                <span className="reminder-status" style={{ color: statusColors[status] }}>
                   {statusLabels[status]}
                 </span>
               )}

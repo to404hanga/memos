@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('api', {
   updateMemo: (memo) => ipcRenderer.invoke('update-memo', memo),
   deleteMemo: (id) => ipcRenderer.invoke('delete-memo', id),
   toggleComplete: (id) => ipcRenderer.invoke('toggle-complete', id),
+  selectImage: () => ipcRenderer.invoke('select-image'),
+  getImagePath: (fileName) => ipcRenderer.invoke('get-image-path', fileName),
   onReminder: (callback) => {
     ipcRenderer.on('reminder-triggered', (_, data) => callback(data));
   },
