@@ -83,8 +83,15 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete }) {
           )}
           {memo.reminderTime && (
             <div className="memo-reminder">
-              <span className="reminder-icon">⏰</span>
+              <span className="reminder-icon">{memo.recurrence && memo.recurrence.type !== 'once' ? '🔁' : '⏰'}</span>
               <span className="reminder-time">{formatTime(memo.reminderTime)}</span>
+              {memo.recurrence && memo.recurrence.type !== 'once' && (
+                <span className="recurrence-label">
+                  {memo.recurrence.type === 'daily' && '每天'}
+                  {memo.recurrence.type === 'weekly' && `每周`}
+                  {memo.recurrence.type === 'monthly' && `每月`}
+                </span>
+              )}
               {status && (
                 <span className="reminder-status" style={{ color: statusColors[status] }}>
                   {statusLabels[status]}

@@ -255,6 +255,151 @@ input, textarea, button {
   margin-top: 4px;
 }
 
+/* ===== 周期提醒选择 ===== */
+.recurrence-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  padding: 2px;
+  margin-bottom: 10px;
+}
+
+.rec-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  font-size: 13px;
+  color: #666;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.rec-tab.active {
+  background: #fff;
+  color: #007aff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+}
+
+.rec-once-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rec-once-row input {
+  flex: 1;
+}
+
+.rec-config {
+  background: #fafafa;
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid #eee;
+}
+
+.rec-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rec-row:last-child {
+  margin-bottom: 0;
+}
+
+.rec-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  min-width: 36px;
+}
+
+.weekday-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.weekday-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid #ddd;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weekday-btn:hover {
+  border-color: #007aff;
+  color: #007aff;
+}
+
+.weekday-btn.active {
+  background: #007aff;
+  border-color: #007aff;
+  color: #fff;
+}
+
+.rec-select {
+  padding: 6px 10px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  outline: none;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.rec-select:focus {
+  border-color: #007aff;
+}
+
+.time-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.time-sep {
+  font-size: 16px;
+  font-weight: 700;
+  color: #666;
+}
+
+.rec-preview {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: rgba(0, 122, 255, 0.06);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #007aff;
+  font-weight: 600;
+  text-align: center;
+}
+
+.recurrence-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #007aff;
+  background: rgba(0, 122, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 2px;
+}
+
 .clear-time {
   background: none;
   border: none;

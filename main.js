@@ -59,6 +59,50 @@ function createTray() {
   tray.on('click', () => mainWindow && mainWindow.show());
 }
 
+// 计算周期提醒的下一次触发时间
+function getNextOccurrence(recurrence) {
+  if (!recurrence || recurrence.type === 'once') return null;
+
+  const now = new Date();
+  const { type, hour, minute } = recurrence;
+
+  if (type === 'daily') {
+    const next = new Date(now);
+    next.setHours(hour, minute, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    return next;
+  }
+
+  if (type === 'weekly') {
+    const dayOfWeek = recurrence.dayOfWeek; // 0=周日, 1=周一, ..., 6=周六
+    const next = new Date(now);
+    next.setHours(hour, minute, 0, 0);
+    const currentDay = now.getDay();
+    let daysUntil = dayOfWeek - currentDay;
+    if (daysUntil < 0 || (daysUntil === 0 && next <= now)) {
+      daysUntil += 7;
+    }
+    next.setDate(next.getDate() + daysUntil);
+    return next;
+  }
+
+  if (type === 'monthly') {
+    const dayOfMonth = recurrence.dayOfMonth; // 1-31
+    const next = new Date(now.getFullYear(), now.getMonth(), dayOfMonth, hour, minute, 0, 0);
+    if (next <= now) {
+      next.setMonth(next.getMonth() + 1);
+    }
+    // 处理月份天数溢出（如 2月30日 -> 3月2日 的情况）
+    if (next.getDate() !== dayOfMonth) {
+      // 回退到上月末
+      next.setDate(0);
+    }
+    return next;
+  }
+
+  return null;
+}
+
 function scheduleReminder(memo) {
   // 清除旧的定时器
   if (activeTimers.has(memo.id)) {
@@ -66,13 +110,32 @@ function scheduleReminder(memo) {
     activeTimers.delete(memo.id);
   }
 
-  if (!memo.reminderTime || memo.completed) return;
+  if (memo.completed) return;
 
-  const reminderDate = new Date(memo.reminderTime);
+  let targetDate;
+
+  if (memo.recurrence && memo.recurrence.type !== 'once') {
+    // 周期性提醒：计算下一次触发时间
+    targetDate = getNextOccurrence(memo.recurrence);
+    if (!targetDate) return;
+
+    // 更新 memo 的 reminderTime 为下次触发时间（用于界面显示）
+    const memos = store.get('memos', []);
+    const index = memos.findIndex((m) => m.id === memo.id);
+    if (index !== -1) {
+      memos[index].reminderTime = targetDate.toISOString();
+      store.set('memos', memos);
+    }
+  } else {
+    // 一次性提醒
+    if (!memo.reminderTime) return;
+    targetDate = new Date(memo.reminderTime);
+  }
+
   const now = new Date();
-  const delay = reminderDate.getTime() - now.getTime();
+  const delay = targetDate.getTime() - now.getTime();
 
-  console.log(`[提醒] "${memo.title}" 计划于 ${reminderDate.toLocaleString()}，延迟 ${Math.round(delay / 1000)}s`);
+  console.log(`[提醒] "${memo.title}" 计划于 ${targetDate.toLocaleString()}，延迟 ${Math.round(delay / 1000)}s${memo.recurrence && memo.recurrence.type !== 'once' ? ` (${memo.recurrence.type})` : ''}`);
 
   if (delay <= 0) {
     console.log(`[提醒] "${memo.title}" 已过期，跳过`);
@@ -84,8 +147,9 @@ function scheduleReminder(memo) {
 
     // 系统通知
     if (Notification.isSupported()) {
+      const recLabel = memo.recurrence && memo.recurrence.type !== 'once' ? ' 🔁' : '';
       const notification = new Notification({
-        title: '⏰ 备忘录提醒',
+        title: `⏰ 备忘录提醒${recLabel}`,
         body: memo.title,
         subtitle: memo.content || '',
         silent: false,
@@ -97,7 +161,7 @@ function scheduleReminder(memo) {
       notification.show();
     }
 
-    // 同时通知渲染进程弹窗（作为后备提醒）
+    // 通知渲染进程弹窗
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
@@ -109,6 +173,15 @@ function scheduleReminder(memo) {
     }
 
     activeTimers.delete(memo.id);
+
+    // 如果是周期性提醒，自动调度下一次
+    if (memo.recurrence && memo.recurrence.type !== 'once') {
+      const freshMemos = store.get('memos', []);
+      const freshMemo = freshMemos.find((m) => m.id === memo.id);
+      if (freshMemo && !freshMemo.completed) {
+        scheduleReminder(freshMemo);
+      }
+    }
   }, delay);
 
   activeTimers.set(memo.id, timer);
@@ -137,7 +210,8 @@ function initMockData() {
       id: uuidv4(),
       title: '团队周会',
       content: '## 议程\n\n- **项目进度**回顾\n- 技术难点讨论\n- 下周 `Sprint` 计划\n\n> 记得准备演示文稿',
-      reminderTime: h(0.5),
+      reminderTime: null,
+      recurrence: { type: 'weekly', dayOfWeek: 1, hour: 10, minute: 0 },
       completed: false,
       createdAt: h(-2),
     },
@@ -185,7 +259,8 @@ function initMockData() {
       id: uuidv4(),
       title: '健身',
       content: '腿部训练日 💪',
-      reminderTime: d(2, 18),
+      reminderTime: null,
+      recurrence: { type: 'weekly', dayOfWeek: 3, hour: 18, minute: 0 },
       completed: false,
       createdAt: h(-1),
     },
@@ -193,7 +268,8 @@ function initMockData() {
       id: uuidv4(),
       title: '缴纳水电费',
       content: '',
-      reminderTime: d(5, 12),
+      reminderTime: null,
+      recurrence: { type: 'monthly', dayOfMonth: 5, hour: 10, minute: 0 },
       completed: false,
       createdAt: h(-72),
     },
@@ -272,6 +348,7 @@ ipcMain.handle('add-memo', (_, memo) => {
     title: memo.title,
     content: memo.content || '',
     reminderTime: memo.reminderTime || null,
+    recurrence: memo.recurrence || null,
     completed: false,
     createdAt: new Date().toISOString(),
   };
