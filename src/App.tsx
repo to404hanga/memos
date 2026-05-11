@@ -2,14 +2,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import MemoForm from './components/MemoForm';
 import MemoList from './components/MemoList';
 import Timeline from './components/Timeline';
+import type { Memo, MemoFormData, ReminderData } from '../types/global';
 
-export default function App() {
-  const [memos, setMemos] = useState([]);
+type FilterType = 'all' | 'active' | 'completed';
+type ViewType = 'list' | 'timeline';
+
+export default function App(): React.ReactElement {
+  const [memos, setMemos] = useState<Memo[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [editingMemo, setEditingMemo] = useState(null);
-  const [filter, setFilter] = useState('all'); // all | active | completed
-  const [reminder, setReminder] = useState(null);
-  const [view, setView] = useState('list'); // list | timeline
+  const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [reminder, setReminder] = useState<ReminderData | null>(null);
+  const [view, setView] = useState<ViewType>('list');
 
   const loadMemos = useCallback(async () => {
     const data = await window.api.getMemos();
@@ -20,8 +24,7 @@ export default function App() {
     loadMemos();
     const interval = setInterval(loadMemos, 60000);
 
-    // 监听主进程的提醒事件
-    window.api.onReminder((data) => {
+    window.api.onReminder((data: ReminderData) => {
       setReminder(data);
       loadMemos();
     });
@@ -29,30 +32,30 @@ export default function App() {
     return () => clearInterval(interval);
   }, [loadMemos]);
 
-  const handleAdd = async (memo) => {
+  const handleAdd = async (memo: MemoFormData) => {
     await window.api.addMemo(memo);
     await loadMemos();
     setShowForm(false);
   };
 
-  const handleUpdate = async (memo) => {
+  const handleUpdate = async (memo: MemoFormData) => {
     await window.api.updateMemo(memo);
     await loadMemos();
     setEditingMemo(null);
     setShowForm(false);
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: string) => {
     await window.api.deleteMemo(id);
     await loadMemos();
   };
 
-  const handleToggle = async (id) => {
+  const handleToggle = async (id: string) => {
     await window.api.toggleComplete(id);
     await loadMemos();
   };
 
-  const handleEdit = (memo) => {
+  const handleEdit = (memo: Memo) => {
     setEditingMemo(memo);
     setShowForm(true);
   };
@@ -98,7 +101,7 @@ export default function App() {
         </div>
         {view === 'list' && (
           <div className="sub-filter">
-            {['all', 'active', 'completed'].map((f) => (
+            {(['all', 'active', 'completed'] as FilterType[]).map((f) => (
               <button
                 key={f}
                 className={`sub-filter-btn ${filter === f ? 'active' : ''}`}

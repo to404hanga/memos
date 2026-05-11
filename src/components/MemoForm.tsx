@@ -1,19 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MarkdownView from './MarkdownView';
+import type { Memo, MemoFormData, Recurrence } from '../../types/global';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-export default function MemoForm({ memo, onSubmit, onCancel }) {
+type RecurrenceType = 'once' | 'daily' | 'weekly' | 'monthly';
+
+interface MemoFormProps {
+  memo: Memo | null;
+  onSubmit: (data: MemoFormData) => void;
+  onCancel: () => void;
+}
+
+export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): React.ReactElement {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [reminderTime, setReminderTime] = useState('');
   const [showPreview, setShowPreview] = useState(false);
-  const textareaRef = useRef(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 周期相关
-  const [recurrenceType, setRecurrenceType] = useState('once'); // once | daily | weekly | monthly
-  const [recDayOfWeek, setRecDayOfWeek] = useState(1); // 0-6
-  const [recDayOfMonth, setRecDayOfMonth] = useState(1); // 1-31
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('once');
+  const [recDayOfWeek, setRecDayOfWeek] = useState(1);
+  const [recDayOfMonth, setRecDayOfMonth] = useState(1);
   const [recHour, setRecHour] = useState(9);
   const [recMinute, setRecMinute] = useState(0);
 
@@ -34,18 +42,18 @@ export default function MemoForm({ memo, onSubmit, onCancel }) {
     }
   }, [memo]);
 
-  function toLocalDatetime(isoStr) {
+  function toLocalDatetime(isoStr: string): string {
     const d = new Date(isoStr);
     const offset = d.getTimezoneOffset();
     const local = new Date(d.getTime() - offset * 60000);
     return local.toISOString().slice(0, 16);
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    const data = {
+    const data: MemoFormData = {
       title: title.trim(),
       content: content,
     };
@@ -54,7 +62,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }) {
       data.reminderTime = reminderTime ? new Date(reminderTime).toISOString() : null;
       data.recurrence = null;
     } else {
-      const rec = {
+      const rec: Recurrence = {
         type: recurrenceType,
         hour: recHour,
         minute: recMinute,
@@ -62,7 +70,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }) {
       if (recurrenceType === 'weekly') rec.dayOfWeek = recDayOfWeek;
       if (recurrenceType === 'monthly') rec.dayOfMonth = recDayOfMonth;
       data.recurrence = rec;
-      data.reminderTime = null; // 由主进程计算
+      data.reminderTime = null;
     }
 
     if (memo) data.id = memo.id;
@@ -93,8 +101,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }) {
   const localNow = new Date(now.getTime() - offset * 60000);
   const minDatetime = localNow.toISOString().slice(0, 16);
 
-  // 生成周期预览文字
-  function getRecurrencePreview() {
+  function getRecurrencePreview(): string {
     const timeStr = `${String(recHour).padStart(2, '0')}:${String(recMinute).padStart(2, '0')}`;
     if (recurrenceType === 'daily') return `每天 ${timeStr}`;
     if (recurrenceType === 'weekly') return `每${WEEKDAYS[recDayOfWeek]} ${timeStr}`;
@@ -160,12 +167,12 @@ export default function MemoForm({ memo, onSubmit, onCancel }) {
       <div className="form-group">
         <label>提醒方式</label>
         <div className="recurrence-tabs">
-          {[
-            { key: 'once', label: '单次' },
-            { key: 'daily', label: '每天' },
-            { key: 'weekly', label: '每周' },
-            { key: 'monthly', label: '每月' },
-          ].map((item) => (
+          {([
+            { key: 'once' as const, label: '单次' },
+            { key: 'daily' as const, label: '每天' },
+            { key: 'weekly' as const, label: '每周' },
+            { key: 'monthly' as const, label: '每月' },
+          ]).map((item) => (
             <button
               key={item.key}
               type="button"

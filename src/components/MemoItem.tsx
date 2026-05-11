@@ -1,12 +1,21 @@
 import React, { useState } from 'react';
 import MarkdownView from './MarkdownView';
+import type { Memo } from '../../types/global';
 
-export default function MemoItem({ memo, onToggle, onEdit, onDelete }) {
+type ReminderStatus = 'expired' | 'soon' | 'pending' | 'completed';
+
+interface MemoItemProps {
+  memo: Memo;
+  onToggle: (id: string) => void;
+  onEdit: (memo: Memo) => void;
+  onDelete: (id: string) => void;
+}
+
+export default function MemoItem({ memo, onToggle, onEdit, onDelete }: MemoItemProps): React.ReactElement {
   const [showConfirm, setShowConfirm] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const formatTime = (isoStr) => {
-    if (!isoStr) return null;
+  const formatTime = (isoStr: string): string => {
     const d = new Date(isoStr);
     const now = new Date();
     const isToday = d.toDateString() === now.toDateString();
@@ -26,24 +35,24 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete }) {
     });
   };
 
-  const getReminderStatus = () => {
+  const getReminderStatus = (): ReminderStatus | null => {
     if (!memo.reminderTime) return null;
     const d = new Date(memo.reminderTime);
     const now = new Date();
     if (memo.completed) return 'completed';
     if (d < now) return 'expired';
-    if (d - now < 3600000) return 'soon';
+    if (d.getTime() - now.getTime() < 3600000) return 'soon';
     return 'pending';
   };
 
   const status = getReminderStatus();
-  const statusLabels = {
+  const statusLabels: Record<ReminderStatus, string> = {
     expired: '已过期',
     soon: '即将提醒',
     pending: '待提醒',
     completed: '已完成',
   };
-  const statusColors = {
+  const statusColors: Record<ReminderStatus, string> = {
     expired: '#ff6b6b',
     soon: '#ffa726',
     pending: '#42a5f5',
@@ -88,8 +97,8 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete }) {
               {memo.recurrence && memo.recurrence.type !== 'once' && (
                 <span className="recurrence-label">
                   {memo.recurrence.type === 'daily' && '每天'}
-                  {memo.recurrence.type === 'weekly' && `每周`}
-                  {memo.recurrence.type === 'monthly' && `每月`}
+                  {memo.recurrence.type === 'weekly' && '每周'}
+                  {memo.recurrence.type === 'monthly' && '每月'}
                 </span>
               )}
               {status && (

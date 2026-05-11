@@ -1,17 +1,13 @@
 import React, { useMemo } from 'react';
 import { marked } from 'marked';
 
-// 配置 marked
 marked.setOptions({
   breaks: true,
   gfm: true,
 });
 
-// 自定义渲染器：将本地图片路径转为 file:// 协议
 const renderer = new marked.Renderer();
-const originalImage = renderer.image.bind(renderer);
 renderer.image = function ({ href, title, text }) {
-  // 支持本地绝对路径
   let src = href;
   if (src && !src.startsWith('http') && !src.startsWith('file://') && !src.startsWith('data:')) {
     src = `file://${src}`;
@@ -20,10 +16,15 @@ renderer.image = function ({ href, title, text }) {
 };
 marked.use({ renderer });
 
-export default function MarkdownView({ content, className }) {
+interface MarkdownViewProps {
+  content: string;
+  className?: string;
+}
+
+export default function MarkdownView({ content, className }: MarkdownViewProps): React.ReactElement {
   const html = useMemo(() => {
     if (!content) return '';
-    return marked.parse(content);
+    return marked.parse(content) as string;
   }, [content]);
 
   return (
