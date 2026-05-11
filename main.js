@@ -1,18 +1,119 @@
 const { app, BrowserWindow, ipcMain, Notification, Tray, Menu, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const Store = require('electron-store');
+const initSqlJs = require('sql.js');
 const { v4: uuidv4 } = require('uuid');
 
-const store = new Store({
-  name: 'memos',
-  defaults: { memos: [] },
-});
-
+let db = null;
+let dbPath = '';
 let mainWindow = null;
 let tray = null;
 const activeTimers = new Map();
 
+// ===== SQLite 初始化 =====
+async function initDatabase() {
+  const SQL = await initSqlJs();
+  dbPath = path.join(app.getPath('userData'), 'memos.db');
+
+  if (fs.existsSync(dbPath)) {
+    const buffer = fs.readFileSync(dbPath);
+    db = new SQL.Database(buffer);
+  } else {
+    db = new SQL.Database();
+  }
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS memos (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT DEFAULT '',
+      reminder_time TEXT,
+      recurrence TEXT,
+      completed INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL
+    )
+  `);
+
+  saveDb();
+  console.log(`[DB] SQLite 已初始化: ${dbPath}`);
+}
+
+function saveDb() {
+  const data = db.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync(dbPath, buffer);
+}
+
+// ===== 数据库操作封装 =====
+function getAllMemos() {
+  const stmt = db.prepare('SELECT * FROM memos ORDER BY created_at DESC');
+  const rows = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject());
+  }
+  stmt.free();
+  return rows.map(rowToMemo);
+}
+
+function getMemoById(id) {
+  const stmt = db.prepare('SELECT * FROM memos WHERE id = ?');
+  stmt.bind([id]);
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return rowToMemo(row);
+  }
+  stmt.free();
+  return null;
+}
+
+function insertMemo(memo) {
+  db.run(
+    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.createdAt]
+  );
+  saveDb();
+}
+
+function updateMemoInDb(memo) {
+  db.run(
+    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ? WHERE id = ?',
+    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.id]
+  );
+  saveDb();
+}
+
+function deleteMemoFromDb(id) {
+  db.run('DELETE FROM memos WHERE id = ?', [id]);
+  saveDb();
+}
+
+function updateReminderTime(id, reminderTime) {
+  db.run('UPDATE memos SET reminder_time = ? WHERE id = ?', [reminderTime, id]);
+  saveDb();
+}
+
+function getMemoCount() {
+  const stmt = db.prepare('SELECT COUNT(*) as count FROM memos');
+  stmt.step();
+  const count = stmt.getAsObject().count;
+  stmt.free();
+  return count;
+}
+
+function rowToMemo(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content || '',
+    reminderTime: row.reminder_time || null,
+    recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,
+    completed: row.completed === 1,
+    createdAt: row.created_at,
+  };
+}
+
+// ===== 窗口 & 托盘 =====
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1680,
@@ -30,7 +131,6 @@ function createWindow() {
     },
   });
 
-  // 优先加载构建产物，仅当 DEV_SERVER 环境变量存在时使用 dev server
   if (process.env.DEV_SERVER) {
     mainWindow.loadURL('http://localhost:3000');
   } else {
@@ -59,7 +159,7 @@ function createTray() {
   tray.on('click', () => mainWindow && mainWindow.show());
 }
 
-// 计算周期提醒的下一次触发时间
+// ===== 提醒调度 =====
 function getNextOccurrence(recurrence) {
   if (!recurrence || recurrence.type === 'once') return null;
 
@@ -74,7 +174,7 @@ function getNextOccurrence(recurrence) {
   }
 
   if (type === 'weekly') {
-    const dayOfWeek = recurrence.dayOfWeek; // 0=周日, 1=周一, ..., 6=周六
+    const dayOfWeek = recurrence.dayOfWeek;
     const next = new Date(now);
     next.setHours(hour, minute, 0, 0);
     const currentDay = now.getDay();
@@ -87,14 +187,12 @@ function getNextOccurrence(recurrence) {
   }
 
   if (type === 'monthly') {
-    const dayOfMonth = recurrence.dayOfMonth; // 1-31
+    const dayOfMonth = recurrence.dayOfMonth;
     const next = new Date(now.getFullYear(), now.getMonth(), dayOfMonth, hour, minute, 0, 0);
     if (next <= now) {
       next.setMonth(next.getMonth() + 1);
     }
-    // 处理月份天数溢出（如 2月30日 -> 3月2日 的情况）
     if (next.getDate() !== dayOfMonth) {
-      // 回退到上月末
       next.setDate(0);
     }
     return next;
@@ -104,7 +202,6 @@ function getNextOccurrence(recurrence) {
 }
 
 function scheduleReminder(memo) {
-  // 清除旧的定时器
   if (activeTimers.has(memo.id)) {
     clearTimeout(activeTimers.get(memo.id));
     activeTimers.delete(memo.id);
@@ -115,19 +212,10 @@ function scheduleReminder(memo) {
   let targetDate;
 
   if (memo.recurrence && memo.recurrence.type !== 'once') {
-    // 周期性提醒：计算下一次触发时间
     targetDate = getNextOccurrence(memo.recurrence);
     if (!targetDate) return;
-
-    // 更新 memo 的 reminderTime 为下次触发时间（用于界面显示）
-    const memos = store.get('memos', []);
-    const index = memos.findIndex((m) => m.id === memo.id);
-    if (index !== -1) {
-      memos[index].reminderTime = targetDate.toISOString();
-      store.set('memos', memos);
-    }
+    updateReminderTime(memo.id, targetDate.toISOString());
   } else {
-    // 一次性提醒
     if (!memo.reminderTime) return;
     targetDate = new Date(memo.reminderTime);
   }
@@ -145,7 +233,6 @@ function scheduleReminder(memo) {
   const timer = setTimeout(() => {
     console.log(`[提醒] 触发: "${memo.title}"`);
 
-    // 系统通知
     if (Notification.isSupported()) {
       const recLabel = memo.recurrence && memo.recurrence.type !== 'once' ? ' 🔁' : '';
       const notification = new Notification({
@@ -161,7 +248,6 @@ function scheduleReminder(memo) {
       notification.show();
     }
 
-    // 通知渲染进程弹窗
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
@@ -174,10 +260,8 @@ function scheduleReminder(memo) {
 
     activeTimers.delete(memo.id);
 
-    // 如果是周期性提醒，自动调度下一次
     if (memo.recurrence && memo.recurrence.type !== 'once') {
-      const freshMemos = store.get('memos', []);
-      const freshMemo = freshMemos.find((m) => m.id === memo.id);
+      const freshMemo = getMemoById(memo.id);
       if (freshMemo && !freshMemo.completed) {
         scheduleReminder(freshMemo);
       }
@@ -188,13 +272,13 @@ function scheduleReminder(memo) {
 }
 
 function loadAllReminders() {
-  const memos = store.get('memos', []);
+  const memos = getAllMemos();
   memos.forEach((memo) => scheduleReminder(memo));
 }
 
+// ===== Mock 数据 =====
 function initMockData() {
-  const memos = store.get('memos', []);
-  if (memos.length > 0) return; // 已有数据则跳过
+  if (getMemoCount() > 0) return;
 
   const now = new Date();
   const h = (hours) => new Date(now.getTime() + hours * 3600000).toISOString();
@@ -206,115 +290,26 @@ function initMockData() {
   };
 
   const mockMemos = [
-    {
-      id: uuidv4(),
-      title: '团队周会',
-      content: '## 议程\n\n- **项目进度**回顾\n- 技术难点讨论\n- 下周 `Sprint` 计划\n\n> 记得准备演示文稿',
-      reminderTime: null,
-      recurrence: { type: 'weekly', dayOfWeek: 1, hour: 10, minute: 0 },
-      completed: false,
-      createdAt: h(-2),
-    },
-    {
-      id: uuidv4(),
-      title: '提交周报',
-      content: '汇总本周工作内容，发送给主管\n\n### 要点\n1. 完成了登录模块重构\n2. 修复了 **3 个** 线上 Bug\n3. 编写单元测试 `coverage > 80%`',
-      reminderTime: h(1.5),
-      completed: false,
-      createdAt: h(-5),
-    },
-    {
-      id: uuidv4(),
-      title: '回复客户邮件',
-      content: '关于 V2.0 版本需求确认\n\n- [ ] 用户权限管理\n- [ ] 数据导出功能\n- [x] 多语言支持',
-      reminderTime: h(-1),
-      completed: false,
-      createdAt: h(-24),
-    },
-    {
-      id: uuidv4(),
-      title: '代码审查',
-      content: '审查小王提交的登录模块 PR\n\n关注点：\n- 安全性：*SQL注入*防护\n- 性能：接口响应时间\n- 代码规范',
-      reminderTime: d(1, 10),
-      completed: false,
-      createdAt: h(-3),
-    },
-    {
-      id: uuidv4(),
-      title: '预约牙医',
-      content: '下午 3 点，记得带**医保卡**',
-      reminderTime: d(1, 15),
-      completed: false,
-      createdAt: h(-48),
-    },
-    {
-      id: uuidv4(),
-      title: '准备技术分享 PPT',
-      content: '## 微服务架构实践\n\n### 大纲\n1. 为什么选择微服务\n2. 服务拆分策略\n3. `gRPC` vs `REST`\n4. 监控与可观测性\n\n参考：[Martin Fowler](https://martinfowler.com/microservices/)',
-      reminderTime: d(2, 9),
-      completed: false,
-      createdAt: h(-10),
-    },
-    {
-      id: uuidv4(),
-      title: '健身',
-      content: '腿部训练日 💪',
-      reminderTime: null,
-      recurrence: { type: 'weekly', dayOfWeek: 3, hour: 18, minute: 0 },
-      completed: false,
-      createdAt: h(-1),
-    },
-    {
-      id: uuidv4(),
-      title: '缴纳水电费',
-      content: '',
-      reminderTime: null,
-      recurrence: { type: 'monthly', dayOfMonth: 5, hour: 10, minute: 0 },
-      completed: false,
-      createdAt: h(-72),
-    },
-    {
-      id: uuidv4(),
-      title: '买生日礼物',
-      content: '小李下周五生日\n\n备选：\n- 机械键盘 ⌨️\n- 技术书籍 📚\n- 咖啡礼盒 ☕',
-      reminderTime: d(7, 11),
-      completed: false,
-      createdAt: h(-24),
-    },
-    {
-      id: uuidv4(),
-      title: '整理书签收藏',
-      content: '',
-      reminderTime: null,
-      completed: false,
-      createdAt: h(-100),
-    },
-    {
-      id: uuidv4(),
-      title: '更新项目文档',
-      content: 'API 接口文档需要补充新增的 **5** 个端点',
-      reminderTime: h(-24),
-      completed: true,
-      createdAt: h(-72),
-    },
-    {
-      id: uuidv4(),
-      title: '修复登录页 Bug',
-      content: '验证码输入框在 Safari 上无法聚焦\n\n```css\ninput:focus { outline: none; }\n```',
-      reminderTime: h(-48),
-      completed: true,
-      createdAt: h(-96),
-    },
+    { id: uuidv4(), title: '团队周会', content: '## 议程\n\n- **项目进度**回顾\n- 技术难点讨论\n- 下周 `Sprint` 计划\n\n> 记得准备演示文稿', reminderTime: null, recurrence: { type: 'weekly', dayOfWeek: 1, hour: 10, minute: 0 }, completed: false, createdAt: h(-2) },
+    { id: uuidv4(), title: '提交周报', content: '汇总本周工作内容，发送给主管\n\n### 要点\n1. 完成了登录模块重构\n2. 修复了 **3 个** 线上 Bug\n3. 编写单元测试 `coverage > 80%`', reminderTime: h(1.5), recurrence: null, completed: false, createdAt: h(-5) },
+    { id: uuidv4(), title: '回复客户邮件', content: '关于 V2.0 版本需求确认\n\n- [ ] 用户权限管理\n- [ ] 数据导出功能\n- [x] 多语言支持', reminderTime: h(-1), recurrence: null, completed: false, createdAt: h(-24) },
+    { id: uuidv4(), title: '代码审查', content: '审查小王提交的登录模块 PR\n\n关注点：\n- 安全性：*SQL注入*防护\n- 性能：接口响应时间\n- 代码规范', reminderTime: d(1, 10), recurrence: null, completed: false, createdAt: h(-3) },
+    { id: uuidv4(), title: '预约牙医', content: '下午 3 点，记得带**医保卡**', reminderTime: d(1, 15), recurrence: null, completed: false, createdAt: h(-48) },
+    { id: uuidv4(), title: '准备技术分享 PPT', content: '## 微服务架构实践\n\n### 大纲\n1. 为什么选择微服务\n2. 服务拆分策略\n3. `gRPC` vs `REST`\n4. 监控与可观测性\n\n参考：[Martin Fowler](https://martinfowler.com/microservices/)', reminderTime: d(2, 9), recurrence: null, completed: false, createdAt: h(-10) },
+    { id: uuidv4(), title: '健身', content: '腿部训练日 💪', reminderTime: null, recurrence: { type: 'weekly', dayOfWeek: 3, hour: 18, minute: 0 }, completed: false, createdAt: h(-1) },
+    { id: uuidv4(), title: '缴纳水电费', content: '', reminderTime: null, recurrence: { type: 'monthly', dayOfMonth: 5, hour: 10, minute: 0 }, completed: false, createdAt: h(-72) },
+    { id: uuidv4(), title: '买生日礼物', content: '小李下周五生日\n\n备选：\n- 机械键盘 ⌨️\n- 技术书籍 📚\n- 咖啡礼盒 ☕', reminderTime: d(7, 11), recurrence: null, completed: false, createdAt: h(-24) },
+    { id: uuidv4(), title: '整理书签收藏', content: '', reminderTime: null, recurrence: null, completed: false, createdAt: h(-100) },
+    { id: uuidv4(), title: '更新项目文档', content: 'API 接口文档需要补充新增的 **5** 个端点', reminderTime: h(-24), recurrence: null, completed: true, createdAt: h(-72) },
+    { id: uuidv4(), title: '修复登录页 Bug', content: '验证码输入框在 Safari 上无法聚焦\n\n```css\ninput:focus { outline: none; }\n```', reminderTime: h(-48), recurrence: null, completed: true, createdAt: h(-96) },
   ];
 
-  store.set('memos', mockMemos);
+  mockMemos.forEach((m) => insertMemo(m));
   console.log(`[Mock] 已插入 ${mockMemos.length} 条示例数据`);
 }
 
-// IPC 通信
-ipcMain.handle('get-memos', () => {
-  return store.get('memos', []);
-});
+// ===== IPC 通信 =====
+ipcMain.handle('get-memos', () => getAllMemos());
 
 ipcMain.handle('select-image', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -327,13 +322,11 @@ ipcMain.handle('select-image', async () => {
   const ext = path.extname(srcPath);
   const fileName = `${uuidv4()}${ext}`;
 
-  // 存储到应用数据目录下的 images 文件夹
   const imagesDir = path.join(app.getPath('userData'), 'images');
   if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
 
   const destPath = path.join(imagesDir, fileName);
   fs.copyFileSync(srcPath, destPath);
-
   return { fileName, filePath: destPath };
 });
 
@@ -342,7 +335,6 @@ ipcMain.handle('get-image-path', (_, fileName) => {
 });
 
 ipcMain.handle('add-memo', (_, memo) => {
-  const memos = store.get('memos', []);
   const newMemo = {
     id: uuidv4(),
     title: memo.title,
@@ -352,28 +344,22 @@ ipcMain.handle('add-memo', (_, memo) => {
     completed: false,
     createdAt: new Date().toISOString(),
   };
-  memos.unshift(newMemo);
-  store.set('memos', memos);
+  insertMemo(newMemo);
   scheduleReminder(newMemo);
   return newMemo;
 });
 
 ipcMain.handle('update-memo', (_, updatedMemo) => {
-  const memos = store.get('memos', []);
-  const index = memos.findIndex((m) => m.id === updatedMemo.id);
-  if (index !== -1) {
-    memos[index] = { ...memos[index], ...updatedMemo };
-    store.set('memos', memos);
-    scheduleReminder(memos[index]);
-    return memos[index];
-  }
-  return null;
+  const existing = getMemoById(updatedMemo.id);
+  if (!existing) return null;
+  const merged = { ...existing, ...updatedMemo };
+  updateMemoInDb(merged);
+  scheduleReminder(merged);
+  return merged;
 });
 
 ipcMain.handle('delete-memo', (_, id) => {
-  const memos = store.get('memos', []);
-  const filtered = memos.filter((m) => m.id !== id);
-  store.set('memos', filtered);
+  deleteMemoFromDb(id);
   if (activeTimers.has(id)) {
     clearTimeout(activeTimers.get(id));
     activeTimers.delete(id);
@@ -382,25 +368,22 @@ ipcMain.handle('delete-memo', (_, id) => {
 });
 
 ipcMain.handle('toggle-complete', (_, id) => {
-  const memos = store.get('memos', []);
-  const index = memos.findIndex((m) => m.id === id);
-  if (index !== -1) {
-    memos[index].completed = !memos[index].completed;
-    store.set('memos', memos);
-    if (memos[index].completed && activeTimers.has(id)) {
-      clearTimeout(activeTimers.get(id));
-      activeTimers.delete(id);
-    } else if (!memos[index].completed) {
-      scheduleReminder(memos[index]);
-    }
-    return memos[index];
+  const memo = getMemoById(id);
+  if (!memo) return null;
+  memo.completed = !memo.completed;
+  updateMemoInDb(memo);
+  if (memo.completed && activeTimers.has(id)) {
+    clearTimeout(activeTimers.get(id));
+    activeTimers.delete(id);
+  } else if (!memo.completed) {
+    scheduleReminder(memo);
   }
-  return null;
+  return memo;
 });
 
-app.whenReady().then(() => {
-  // 清除旧数据，重新插入 mock 数据以便预览
-  store.set('memos', []);
+// ===== 应用生命周期 =====
+app.whenReady().then(async () => {
+  await initDatabase();
   initMockData();
 
   createWindow();
@@ -424,4 +407,8 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+  if (db) {
+    saveDb();
+    db.close();
+  }
 });
