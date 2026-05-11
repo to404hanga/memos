@@ -18,7 +18,7 @@
 - 列表视图：按状态筛选（全部/待办/已完成）
 - 标记完成/未完成
 - 系统托盘常驻，关闭窗口不退出
-- 数据本地持久化存储
+- SQLite 本地数据库持久化存储
 
 ## 运行
 
@@ -36,6 +36,6 @@ npm run dev
 ## 技术栈
 
 - Electron（桌面框架）
-- React（UI 组件）
+- React + TypeScript（UI 组件）
 - Marked（Markdown 解析渲染）
-- electron-store（本地数据持久化）
+- sql.js（SQLite 本地数据库）
