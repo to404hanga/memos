@@ -15,8 +15,8 @@ const activeTimers = new Map();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 990,
-    height: 700,
+    width: 1680,
+    height: 1188,
     minWidth: 600,
     minHeight: 420,
     titleBarStyle: 'hiddenInset',
