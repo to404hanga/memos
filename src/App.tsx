@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import MemoForm from './components/MemoForm';
 import MemoList from './components/MemoList';
 import Timeline from './components/Timeline';
@@ -14,11 +14,20 @@ export default function App(): React.ReactElement {
   const [filter, setFilter] = useState<FilterType>('all');
   const [reminder, setReminder] = useState<ReminderData | null>(null);
   const [view, setView] = useState<ViewType>('list');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadMemos = useCallback(async () => {
-    const data = await window.api.getMemos();
-    setMemos(data);
-  }, []);
+    if (searchQuery.trim()) {
+      const data = await window.api.searchMemos(searchQuery.trim());
+      setMemos(data);
+    } else {
+      const data = await window.api.getMemos();
+      setMemos(data);
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
     loadMemos();
@@ -31,6 +40,27 @@ export default function App(): React.ReactElement {
 
     return () => clearInterval(interval);
   }, [loadMemos]);
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      if (value.trim()) {
+        const data = await window.api.searchMemos(value.trim());
+        setMemos(data);
+      } else {
+        const data = await window.api.getMemos();
+        setMemos(data);
+      }
+    }, 300);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setIsSearching(false);
+    window.api.getMemos().then(setMemos);
+    searchRef.current?.blur();
+  };
 
   const handleAdd = async (memo: MemoFormData) => {
     await window.api.addMemo(memo);
@@ -79,6 +109,22 @@ export default function App(): React.ReactElement {
         <div className="header-top">
           <h1>备忘录</h1>
           <span className="badge">{activeCount} 项待办</span>
+        </div>
+        <div className="search-bar">
+          <span className="search-icon">🔍</span>
+          <input
+            ref={searchRef}
+            type="text"
+            className="search-input"
+            placeholder="搜索备忘录..."
+            value={searchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onFocus={() => setIsSearching(true)}
+            onBlur={() => { if (!searchQuery) setIsSearching(false); }}
+          />
+          {searchQuery && (
+            <button className="search-clear" onClick={clearSearch}>✕</button>
+          )}
         </div>
         <div className="header-actions">
           <div className="filter-tabs">
@@ -136,8 +182,8 @@ export default function App(): React.ReactElement {
           />
           {filteredMemos.length === 0 && (
             <div className="empty-state">
-              <div className="empty-icon">📝</div>
-              <p>{filter === 'all' ? '暂无备忘录，点击「+ 新建」添加' : '该分类下暂无内容'}</p>
+              <div className="empty-icon">{searchQuery ? '🔍' : '📝'}</div>
+              <p>{searchQuery ? `未找到与「${searchQuery}」相关的备忘录` : filter === 'all' ? '暂无备忘录，点击「+ 新建」添加' : '该分类下暂无内容'}</p>
             </div>
           )}
         </>

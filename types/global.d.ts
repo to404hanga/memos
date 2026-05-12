@@ -37,6 +37,7 @@ export interface ImageResult {
 
 export interface ElectronAPI {
   getMemos: () => Promise<Memo[]>;
+  searchMemos: (keyword: string) => Promise<Memo[]>;
   addMemo: (memo: MemoFormData) => Promise<Memo>;
   updateMemo: (memo: MemoFormData) => Promise<Memo | null>;
   deleteMemo: (id: string) => Promise<boolean>;

@@ -277,6 +277,18 @@ function loadAllReminders() {
 // ===== IPC 通信 =====
 ipcMain.handle('get-memos', () => getAllMemos());
 
+ipcMain.handle('search-memos', (_, keyword) => {
+  const k = `%${keyword}%`;
+  const stmt = db.prepare('SELECT * FROM memos WHERE title LIKE ? OR content LIKE ? ORDER BY created_at DESC');
+  stmt.bind([k, k]);
+  const rows = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject());
+  }
+  stmt.free();
+  return rows.map(rowToMemo);
+});
+
 ipcMain.handle('select-image', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
