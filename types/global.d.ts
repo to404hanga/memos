@@ -24,6 +24,7 @@ export interface Memo {
   pinned: boolean;
   tags: string[];
   createdAt: string;
+  deletedAt: string | null;
 }
 
 export interface MemoFormData {
@@ -53,6 +54,10 @@ export interface ElectronAPI {
   addMemo: (memo: MemoFormData) => Promise<Memo>;
   updateMemo: (memo: MemoFormData) => Promise<Memo | null>;
   deleteMemo: (id: string) => Promise<boolean>;
+  getTrash: () => Promise<Memo[]>;
+  restoreMemo: (id: string) => Promise<Memo | null>;
+  permanentDelete: (id: string) => Promise<boolean>;
+  emptyTrash: () => Promise<boolean>;
   toggleComplete: (id: string) => Promise<Memo | null>;
   togglePin: (id: string) => Promise<Memo | null>;
   selectImage: () => Promise<ImageResult | null>;

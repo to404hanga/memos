@@ -275,6 +275,58 @@ input, textarea, button {
 .new-tag-confirm { color: #34c759; }
 .new-tag-cancel { color: #ff3b30; }
 
+/* ===== 回收站 ===== */
+.trash-view {
+  padding: 12px 16px;
+}
+
+.trash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: rgba(255, 59, 48, 0.05);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 59, 48, 0.1);
+}
+
+.trash-info {
+  font-size: 13px;
+  color: #888;
+}
+
+.trash-empty-btn {
+  background: none;
+  border: 1px solid #ff3b30;
+  color: #ff3b30;
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.trash-empty-btn:hover {
+  background: #ff3b30;
+  color: #fff;
+}
+
+.trash-item {
+  opacity: 0.7;
+}
+
+.trash-meta {
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 4px;
+}
+
+.action-btn.restore {
+  font-size: 15px;
+}
+
 /* ===== 备忘项标签 ===== */
 .memo-tags {
   display: flex;

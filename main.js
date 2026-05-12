@@ -65,6 +65,12 @@ async function initDatabase() {
     db.run("ALTER TABLE memos ADD COLUMN reminders TEXT DEFAULT '[]'");
   }
 
+  try {
+    db.run('SELECT deleted_at FROM memos LIMIT 1');
+  } catch (e) {
+    db.run('ALTER TABLE memos ADD COLUMN deleted_at TEXT DEFAULT NULL');
+  }
+
   // 迁移旧数据：将单个 reminderTime/recurrence 转为 reminders 数组
   migrateOldReminders();
 
@@ -104,13 +110,29 @@ function migrateOldReminders() {
 
 // ===== 数据库操作封装 =====
 function getAllMemos() {
-  const stmt = db.prepare('SELECT * FROM memos ORDER BY pinned DESC, created_at DESC');
+  const stmt = db.prepare('SELECT * FROM memos WHERE deleted_at IS NULL ORDER BY pinned DESC, created_at DESC');
   const rows = [];
   while (stmt.step()) {
     rows.push(stmt.getAsObject());
   }
   stmt.free();
   return rows.map(rowToMemo);
+}
+
+function getTrashMemos() {
+  const stmt = db.prepare('SELECT * FROM memos WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC');
+  const rows = [];
+  while (stmt.step()) {
+    rows.push(stmt.getAsObject());
+  }
+  stmt.free();
+  return rows.map(rowToMemo);
+}
+
+function cleanupOldTrash() {
+  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
+  db.run('DELETE FROM memos WHERE deleted_at IS NOT NULL AND deleted_at < ?', [cutoff]);
+  saveDb();
 }
 
 function getMemoById(id) {
@@ -163,6 +185,7 @@ function rowToMemo(row) {
     pinned: row.pinned === 1,
     tags: row.tags ? JSON.parse(row.tags) : [],
     createdAt: row.created_at,
+    deletedAt: row.deleted_at || null,
   };
 }
 
@@ -432,7 +455,7 @@ ipcMain.handle('get-memos', () => getAllMemos());
 
 ipcMain.handle('search-memos', (_, keyword) => {
   const k = `%${keyword}%`;
-  const stmt = db.prepare('SELECT * FROM memos WHERE title LIKE ? OR content LIKE ? ORDER BY pinned DESC, created_at DESC');
+  const stmt = db.prepare('SELECT * FROM memos WHERE deleted_at IS NULL AND (title LIKE ? OR content LIKE ?) ORDER BY pinned DESC, created_at DESC');
   stmt.bind([k, k]);
   const rows = [];
   while (stmt.step()) {
@@ -506,8 +529,32 @@ ipcMain.handle('update-memo', (_, updatedMemo) => {
 });
 
 ipcMain.handle('delete-memo', (_, id) => {
-  deleteMemoFromDb(id);
+  // 软删除：设置 deleted_at 时间戳
+  db.run('UPDATE memos SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), id]);
+  saveDb();
   clearMemoTimers(id);
+  return true;
+});
+
+ipcMain.handle('get-trash', () => getTrashMemos());
+
+ipcMain.handle('restore-memo', (_, id) => {
+  db.run('UPDATE memos SET deleted_at = NULL WHERE id = ?', [id]);
+  saveDb();
+  const memo = getMemoById(id);
+  if (memo) scheduleReminder(memo);
+  return memo;
+});
+
+ipcMain.handle('permanent-delete', (_, id) => {
+  db.run('DELETE FROM memos WHERE id = ?', [id]);
+  saveDb();
+  return true;
+});
+
+ipcMain.handle('empty-trash', () => {
+  db.run('DELETE FROM memos WHERE deleted_at IS NOT NULL');
+  saveDb();
   return true;
 });
 
@@ -585,6 +632,7 @@ app.whenReady().then(async () => {
   }
 
   await initDatabase();
+  cleanupOldTrash();
 
   createWindow();
   createTray();

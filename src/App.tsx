@@ -5,10 +5,11 @@ import Timeline from './components/Timeline';
 import type { Memo, MemoFormData, ReminderData, Tag } from '../types/global';
 
 type FilterType = 'all' | 'active' | 'completed';
-type ViewType = 'list' | 'timeline';
+type ViewType = 'list' | 'timeline' | 'trash';
 
 export default function App(): React.ReactElement {
   const [memos, setMemos] = useState<Memo[]>([]);
+  const [trashMemos, setTrashMemos] = useState<Memo[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
   const [filter, setFilter] = useState<FilterType>('all');
@@ -88,6 +89,27 @@ export default function App(): React.ReactElement {
     refreshTags();
   };
 
+  const loadTrash = async () => {
+    const data = await window.api.getTrash();
+    setTrashMemos(data);
+  };
+
+  const handleRestore = async (id: string) => {
+    await window.api.restoreMemo(id);
+    await loadTrash();
+    await loadMemos();
+  };
+
+  const handlePermanentDelete = async (id: string) => {
+    await window.api.permanentDelete(id);
+    await loadTrash();
+  };
+
+  const handleEmptyTrash = async () => {
+    await window.api.emptyTrash();
+    setTrashMemos([]);
+  };
+
   const handleToggle = async (id: string) => {
     await window.api.toggleComplete(id);
     await loadMemos();
@@ -153,6 +175,12 @@ export default function App(): React.ReactElement {
               onClick={() => setView('timeline')}
             >
               时间轴
+            </button>
+            <button
+              className={`filter-btn ${view === 'trash' ? 'active' : ''}`}
+              onClick={() => { setView('trash'); loadTrash(); }}
+            >
+              回收站
             </button>
           </div>
           <button className="add-btn" onClick={() => { setEditingMemo(null); setShowForm(true); }}>
@@ -222,12 +250,52 @@ export default function App(): React.ReactElement {
             </div>
           )}
         </>
-      ) : (
+      ) : view === 'timeline' ? (
         <Timeline
           memos={memos}
           onToggle={handleToggle}
           onEdit={handleEdit}
         />
+      ) : (
+        <div className="trash-view">
+          {trashMemos.length > 0 && (
+            <div className="trash-header">
+              <span className="trash-info">{trashMemos.length} 项已删除（30 天后自动清理）</span>
+              <button className="trash-empty-btn" onClick={handleEmptyTrash}>清空回收站</button>
+            </div>
+          )}
+          <div className="memo-list">
+            {trashMemos.map((memo) => (
+              <div key={memo.id} className="memo-item trash-item">
+                <div className="memo-main">
+                  <div className="memo-content">
+                    <h3 className="memo-title">{memo.title}</h3>
+                    {memo.content && (
+                      <p className="memo-desc">{memo.content.replace(/[#*`!\[\]()]/g, '').substring(0, 60)}</p>
+                    )}
+                    <div className="trash-meta">
+                      删除于 {new Date(memo.deletedAt!).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+                <div className="memo-actions">
+                  <button className="action-btn restore" onClick={() => handleRestore(memo.id)} title="恢复">
+                    ↩️
+                  </button>
+                  <button className="action-btn delete" onClick={() => handlePermanentDelete(memo.id)} title="永久删除">
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {trashMemos.length === 0 && (
+            <div className="empty-state">
+              <div className="empty-icon">🗑️</div>
+              <p>回收站为空</p>
+            </div>
+          )}
+        </div>
       )}
 
       {reminder && (
