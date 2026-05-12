@@ -7,9 +7,10 @@ interface MemoListProps {
   onToggle: (id: string) => void;
   onEdit: (memo: Memo) => void;
   onDelete: (id: string) => void;
+  onPin: (id: string) => void;
 }
 
-export default function MemoList({ memos, onToggle, onEdit, onDelete }: MemoListProps): React.ReactElement {
+export default function MemoList({ memos, onToggle, onEdit, onDelete, onPin }: MemoListProps): React.ReactElement {
   return (
     <div className="memo-list">
       {memos.map((memo) => (
@@ -19,6 +20,7 @@ export default function MemoList({ memos, onToggle, onEdit, onDelete }: MemoList
           onToggle={onToggle}
           onEdit={onEdit}
           onDelete={onDelete}
+          onPin={onPin}
         />
       ))}
     </div>

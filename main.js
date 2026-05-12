@@ -53,6 +53,12 @@ async function initDatabase() {
     db.run("ALTER TABLE memos ADD COLUMN tags TEXT DEFAULT '[]'");
   }
 
+  try {
+    db.run('SELECT pinned FROM memos LIMIT 1');
+  } catch (e) {
+    db.run('ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0');
+  }
+
   saveDb();
   console.log(`[DB] SQLite 已初始化: ${dbPath}`);
 }
@@ -65,7 +71,7 @@ function saveDb() {
 
 // ===== 数据库操作封装 =====
 function getAllMemos() {
-  const stmt = db.prepare('SELECT * FROM memos ORDER BY created_at DESC');
+  const stmt = db.prepare('SELECT * FROM memos ORDER BY pinned DESC, created_at DESC');
   const rows = [];
   while (stmt.step()) {
     rows.push(stmt.getAsObject());
@@ -88,16 +94,16 @@ function getMemoById(id) {
 
 function insertMemo(memo) {
   db.run(
-    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, JSON.stringify(memo.tags || []), memo.createdAt]
+    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), memo.createdAt]
   );
   saveDb();
 }
 
 function updateMemoInDb(memo) {
   db.run(
-    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, tags = ? WHERE id = ?',
-    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, JSON.stringify(memo.tags || []), memo.id]
+    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ? WHERE id = ?',
+    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), memo.id]
   );
   saveDb();
 }
@@ -120,6 +126,7 @@ function rowToMemo(row) {
     reminderTime: row.reminder_time || null,
     recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,
     completed: row.completed === 1,
+    pinned: row.pinned === 1,
     tags: row.tags ? JSON.parse(row.tags) : [],
     createdAt: row.created_at,
   };
@@ -296,7 +303,7 @@ ipcMain.handle('get-memos', () => getAllMemos());
 
 ipcMain.handle('search-memos', (_, keyword) => {
   const k = `%${keyword}%`;
-  const stmt = db.prepare('SELECT * FROM memos WHERE title LIKE ? OR content LIKE ? ORDER BY created_at DESC');
+  const stmt = db.prepare('SELECT * FROM memos WHERE title LIKE ? OR content LIKE ? ORDER BY pinned DESC, created_at DESC');
   stmt.bind([k, k]);
   const rows = [];
   while (stmt.step()) {
@@ -374,6 +381,14 @@ ipcMain.handle('toggle-complete', (_, id) => {
   } else if (!memo.completed) {
     scheduleReminder(memo);
   }
+  return memo;
+});
+
+ipcMain.handle('toggle-pin', (_, id) => {
+  const memo = getMemoById(id);
+  if (!memo) return null;
+  memo.pinned = !memo.pinned;
+  updateMemoInDb(memo);
   return memo;
 });
 

@@ -93,6 +93,11 @@ export default function App(): React.ReactElement {
     await loadMemos();
   };
 
+  const handlePin = async (id: string) => {
+    await window.api.togglePin(id);
+    await loadMemos();
+  };
+
   const handleEdit = (memo: Memo) => {
     setEditingMemo(memo);
     setShowForm(true);
@@ -208,6 +213,7 @@ export default function App(): React.ReactElement {
             onToggle={handleToggle}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onPin={handlePin}
           />
           {filteredMemos.length === 0 && (
             <div className="empty-state">

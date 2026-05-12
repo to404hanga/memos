@@ -9,9 +9,10 @@ interface MemoItemProps {
   onToggle: (id: string) => void;
   onEdit: (memo: Memo) => void;
   onDelete: (id: string) => void;
+  onPin: (id: string) => void;
 }
 
-export default function MemoItem({ memo, onToggle, onEdit, onDelete }: MemoItemProps): React.ReactElement {
+export default function MemoItem({ memo, onToggle, onEdit, onDelete, onPin }: MemoItemProps): React.ReactElement {
   const [showConfirm, setShowConfirm] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -69,13 +70,16 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete }: MemoItemP
   );
 
   return (
-    <div className={`memo-item ${memo.completed ? 'completed' : ''}`}>
+    <div className={`memo-item ${memo.completed ? 'completed' : ''} ${memo.pinned ? 'pinned' : ''}`}>
       <div className="memo-main">
         <div className={`checkbox ${memo.completed ? 'checked' : ''}`} onClick={() => onToggle(memo.id)}>
           {memo.completed && '✓'}
         </div>
         <div className="memo-content" onClick={() => hasRichContent ? setExpanded(!expanded) : onToggle(memo.id)}>
-          <h3 className="memo-title">{memo.title}</h3>
+          <h3 className="memo-title">
+            {memo.pinned && <span className="pin-icon">📌</span>}
+            {memo.title}
+          </h3>
           {memo.tags && memo.tags.length > 0 && (
             <div className="memo-tags">
               {memo.tags.map((tag) => (
@@ -118,6 +122,13 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete }: MemoItemP
         </div>
       </div>
       <div className="memo-actions">
+        <button
+          className={`action-btn pin ${memo.pinned ? 'active' : ''}`}
+          onClick={() => onPin(memo.id)}
+          title={memo.pinned ? '取消置顶' : '置顶'}
+        >
+          📌
+        </button>
         <button className="action-btn edit" onClick={() => onEdit(memo)} title="编辑">
           ✏️
         </button>

@@ -19,6 +19,7 @@ export interface Memo {
   reminderTime: string | null;
   recurrence: Recurrence | null;
   completed: boolean;
+  pinned: boolean;
   tags: string[];
   createdAt: string;
 }
@@ -50,6 +51,7 @@ export interface ElectronAPI {
   updateMemo: (memo: MemoFormData) => Promise<Memo | null>;
   deleteMemo: (id: string) => Promise<boolean>;
   toggleComplete: (id: string) => Promise<Memo | null>;
+  togglePin: (id: string) => Promise<Memo | null>;
   selectImage: () => Promise<ImageResult | null>;
   getImagePath: (fileName: string) => Promise<string>;
   getTags: () => Promise<Tag[]>;

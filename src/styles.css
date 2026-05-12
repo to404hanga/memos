@@ -658,9 +658,37 @@ input, textarea, button {
   opacity: 0.55;
 }
 
+.memo-item.pinned {
+  border-left: 3px solid #ff9500;
+  background: rgba(255, 149, 0, 0.03);
+}
+
 .memo-item.completed .memo-title {
   text-decoration: line-through;
   color: #999;
+}
+
+.pin-icon {
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+.action-btn.pin {
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+
+.action-btn.pin.active {
+  opacity: 1;
+}
+
+.memo-item:hover .action-btn.pin {
+  opacity: 0.6;
+}
+
+.action-btn.pin.active,
+.memo-item:hover .action-btn.pin.active {
+  opacity: 1;
 }
 
 .memo-main {
