@@ -332,6 +332,20 @@ ipcMain.handle('select-image', async () => {
   return { fileName, filePath: destPath };
 });
 
+ipcMain.handle('save-dropped-image', (_, srcPath) => {
+  const ext = path.extname(srcPath).toLowerCase();
+  const allowed = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
+  if (!allowed.includes(ext)) return null;
+
+  const fileName = `${uuidv4()}${ext}`;
+  const imagesDir = path.join(app.getPath('userData'), 'images');
+  if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+
+  const destPath = path.join(imagesDir, fileName);
+  fs.copyFileSync(srcPath, destPath);
+  return { fileName, filePath: destPath };
+});
+
 ipcMain.handle('get-image-path', (_, fileName) => {
   return path.join(app.getPath('userData'), 'images', fileName);
 });

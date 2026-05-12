@@ -18,8 +18,10 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
   const [content, setContent] = useState('');
   const [reminderTime, setReminderTime] = useState('');
   const [editorMode, setEditorMode] = useState<EditorMode>('split');
+  const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const dragCountRef = useRef(0);
 
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('once');
   const [recDayOfWeek, setRecDayOfWeek] = useState(1);
@@ -148,6 +150,54 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
     pv.scrollTop = ratio * (pv.scrollHeight - pv.clientHeight);
   };
 
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCountRef.current++;
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCountRef.current--;
+    if (dragCountRef.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCountRef.current = 0;
+
+    const files = Array.from(e.dataTransfer.files);
+    const imageFiles = files.filter((f) =>
+      /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name)
+    );
+
+    for (const file of imageFiles) {
+      const filePath = (file as unknown as { path: string }).path;
+      const result = await window.api.saveDroppedImage(filePath);
+      if (result) {
+        const mdImage = `![${file.name}](${result.filePath})`;
+        setContent((prev) => prev + (prev && !prev.endsWith('\n') ? '\n' : '') + mdImage + '\n');
+      }
+    }
+
+    if (imageFiles.length > 0 && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
+
   const now = new Date();
   const offset = now.getTimezoneOffset();
   const localNow = new Date(now.getTime() - offset * 60000);
@@ -268,7 +318,21 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
             </div>
           </div>
         </div>
-        <div className={`editor-container mode-${editorMode}`}>
+        <div
+          className={`editor-container mode-${editorMode} ${isDragging ? 'drag-over' : ''}`}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          {isDragging && (
+            <div className="drop-overlay">
+              <div className="drop-overlay-content">
+                <span className="drop-icon">🖼️</span>
+                <span>松开以插入图片</span>
+              </div>
+            </div>
+          )}
           {editorMode !== 'preview' && (
             <div className="editor-pane">
               <textarea
@@ -277,7 +341,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onScroll={handleEditorScroll}
-                placeholder="支持 Markdown 格式..."
+                placeholder="支持 Markdown 格式，可拖拽图片到此处..."
                 spellCheck={false}
               />
             </div>

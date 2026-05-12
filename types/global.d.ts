@@ -53,6 +53,7 @@ export interface ElectronAPI {
   toggleComplete: (id: string) => Promise<Memo | null>;
   togglePin: (id: string) => Promise<Memo | null>;
   selectImage: () => Promise<ImageResult | null>;
+  saveDroppedImage: (filePath: string) => Promise<ImageResult | null>;
   getImagePath: (fileName: string) => Promise<string>;
   getTags: () => Promise<Tag[]>;
   addTag: (tag: { name: string; color?: string }) => Promise<Tag>;

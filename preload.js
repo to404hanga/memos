@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   toggleComplete: (id) => ipcRenderer.invoke('toggle-complete', id),
   togglePin: (id) => ipcRenderer.invoke('toggle-pin', id),
   selectImage: () => ipcRenderer.invoke('select-image'),
+  saveDroppedImage: (filePath) => ipcRenderer.invoke('save-dropped-image', filePath),
   getImagePath: (fileName) => ipcRenderer.invoke('get-image-path', fileName),
   getTags: () => ipcRenderer.invoke('get-tags'),
   addTag: (tag) => ipcRenderer.invoke('add-tag', tag),
