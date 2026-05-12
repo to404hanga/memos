@@ -6,6 +6,12 @@ export interface Recurrence {
   dayOfMonth?: number;
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Memo {
   id: string;
   title: string;
@@ -13,6 +19,7 @@ export interface Memo {
   reminderTime: string | null;
   recurrence: Recurrence | null;
   completed: boolean;
+  tags: string[];
   createdAt: string;
 }
 
@@ -22,6 +29,7 @@ export interface MemoFormData {
   content: string;
   reminderTime?: string | null;
   recurrence?: Recurrence | null;
+  tags?: string[];
 }
 
 export interface ReminderData {
@@ -44,6 +52,10 @@ export interface ElectronAPI {
   toggleComplete: (id: string) => Promise<Memo | null>;
   selectImage: () => Promise<ImageResult | null>;
   getImagePath: (fileName: string) => Promise<string>;
+  getTags: () => Promise<Tag[]>;
+  addTag: (tag: { name: string; color?: string }) => Promise<Tag>;
+  updateTag: (tag: Tag) => Promise<Tag>;
+  deleteTag: (id: string) => Promise<boolean>;
   onReminder: (callback: (data: ReminderData) => void) => void;
 }
 

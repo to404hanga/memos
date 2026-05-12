@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import MemoForm from './components/MemoForm';
 import MemoList from './components/MemoList';
 import Timeline from './components/Timeline';
-import type { Memo, MemoFormData, ReminderData } from '../types/global';
+import type { Memo, MemoFormData, ReminderData, Tag } from '../types/global';
 
 type FilterType = 'all' | 'active' | 'completed';
 type ViewType = 'list' | 'timeline';
@@ -18,6 +18,8 @@ export default function App(): React.ReactElement {
   const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [filterTag, setFilterTag] = useState<string | null>(null);
 
   const loadMemos = useCallback(async () => {
     if (searchQuery.trim()) {
@@ -31,6 +33,7 @@ export default function App(): React.ReactElement {
 
   useEffect(() => {
     loadMemos();
+    window.api.getTags().then(setAllTags);
     const interval = setInterval(loadMemos, 60000);
 
     window.api.onReminder((data: ReminderData) => {
@@ -40,6 +43,8 @@ export default function App(): React.ReactElement {
 
     return () => clearInterval(interval);
   }, [loadMemos]);
+
+  const refreshTags = () => window.api.getTags().then(setAllTags);
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -65,12 +70,14 @@ export default function App(): React.ReactElement {
   const handleAdd = async (memo: MemoFormData) => {
     await window.api.addMemo(memo);
     await loadMemos();
+    refreshTags();
     setShowForm(false);
   };
 
   const handleUpdate = async (memo: MemoFormData) => {
     await window.api.updateMemo(memo);
     await loadMemos();
+    refreshTags();
     setEditingMemo(null);
     setShowForm(false);
   };
@@ -78,6 +85,7 @@ export default function App(): React.ReactElement {
   const handleDelete = async (id: string) => {
     await window.api.deleteMemo(id);
     await loadMemos();
+    refreshTags();
   };
 
   const handleToggle = async (id: string) => {
@@ -96,8 +104,9 @@ export default function App(): React.ReactElement {
   };
 
   const filteredMemos = memos.filter((m) => {
-    if (filter === 'active') return !m.completed;
-    if (filter === 'completed') return m.completed;
+    if (filter === 'active' && m.completed) return false;
+    if (filter === 'completed' && !m.completed) return false;
+    if (filterTag && (!m.tags || !m.tags.includes(filterTag))) return false;
     return true;
   });
 
@@ -154,6 +163,26 @@ export default function App(): React.ReactElement {
                 onClick={() => setFilter(f)}
               >
                 {f === 'all' ? '全部' : f === 'active' ? '待办' : '已完成'}
+              </button>
+            ))}
+          </div>
+        )}
+        {allTags.length > 0 && (
+          <div className="tag-filter">
+            <button
+              className={`tag-filter-btn ${filterTag === null ? 'active' : ''}`}
+              onClick={() => setFilterTag(null)}
+            >
+              全部标签
+            </button>
+            {allTags.map((tag) => (
+              <button
+                key={tag.id}
+                className={`tag-filter-btn ${filterTag === tag.name ? 'active' : ''}`}
+                style={{ '--tag-color': tag.color } as React.CSSProperties}
+                onClick={() => setFilterTag(filterTag === tag.name ? null : tag.name)}
+              >
+                {tag.name}
               </button>
             ))}
           </div>

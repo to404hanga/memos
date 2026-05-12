@@ -33,9 +33,25 @@ async function initDatabase() {
       reminder_time TEXT,
       recurrence TEXT,
       completed INTEGER DEFAULT 0,
+      tags TEXT DEFAULT '[]',
       created_at TEXT NOT NULL
     )
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS tags (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT NOT NULL DEFAULT '#007aff'
+    )
+  `);
+
+  // 兼容旧数据库：如果 memos 表没有 tags 列则添加
+  try {
+    db.run('SELECT tags FROM memos LIMIT 1');
+  } catch (e) {
+    db.run("ALTER TABLE memos ADD COLUMN tags TEXT DEFAULT '[]'");
+  }
 
   saveDb();
   console.log(`[DB] SQLite 已初始化: ${dbPath}`);
@@ -72,16 +88,16 @@ function getMemoById(id) {
 
 function insertMemo(memo) {
   db.run(
-    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.createdAt]
+    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, JSON.stringify(memo.tags || []), memo.createdAt]
   );
   saveDb();
 }
 
 function updateMemoInDb(memo) {
   db.run(
-    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ? WHERE id = ?',
-    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.id]
+    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, tags = ? WHERE id = ?',
+    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, JSON.stringify(memo.tags || []), memo.id]
   );
   saveDb();
 }
@@ -104,6 +120,7 @@ function rowToMemo(row) {
     reminderTime: row.reminder_time || null,
     recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,
     completed: row.completed === 1,
+    tags: row.tags ? JSON.parse(row.tags) : [],
     createdAt: row.created_at,
   };
 }
@@ -320,6 +337,7 @@ ipcMain.handle('add-memo', (_, memo) => {
     reminderTime: memo.reminderTime || null,
     recurrence: memo.recurrence || null,
     completed: false,
+    tags: memo.tags || [],
     createdAt: new Date().toISOString(),
   };
   insertMemo(newMemo);
@@ -357,6 +375,50 @@ ipcMain.handle('toggle-complete', (_, id) => {
     scheduleReminder(memo);
   }
   return memo;
+});
+
+// ===== 标签管理 =====
+ipcMain.handle('get-tags', () => {
+  const stmt = db.prepare('SELECT * FROM tags ORDER BY name');
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows;
+});
+
+ipcMain.handle('add-tag', (_, tag) => {
+  const id = uuidv4();
+  db.run('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)', [id, tag.name, tag.color || '#007aff']);
+  saveDb();
+  return { id, name: tag.name, color: tag.color || '#007aff' };
+});
+
+ipcMain.handle('update-tag', (_, tag) => {
+  db.run('UPDATE tags SET name = ?, color = ? WHERE id = ?', [tag.name, tag.color, tag.id]);
+  saveDb();
+  return tag;
+});
+
+ipcMain.handle('delete-tag', (_, id) => {
+  // 从所有 memos 中移除该标签
+  const memos = getAllMemos();
+  const stmt2 = db.prepare('SELECT name FROM tags WHERE id = ?');
+  stmt2.bind([id]);
+  let tagName = '';
+  if (stmt2.step()) tagName = stmt2.getAsObject().name;
+  stmt2.free();
+
+  if (tagName) {
+    memos.forEach((m) => {
+      if (m.tags && m.tags.includes(tagName)) {
+        m.tags = m.tags.filter((t) => t !== tagName);
+        db.run('UPDATE memos SET tags = ? WHERE id = ?', [JSON.stringify(m.tags), m.id]);
+      }
+    });
+  }
+  db.run('DELETE FROM tags WHERE id = ?', [id]);
+  saveDb();
+  return true;
 });
 
 // ===== 应用生命周期 =====

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MarkdownView from './MarkdownView';
-import type { Memo, MemoFormData, Recurrence } from '../../types/global';
+import type { Memo, MemoFormData, Recurrence, Tag } from '../../types/global';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
@@ -25,11 +25,21 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
   const [recHour, setRecHour] = useState(9);
   const [recMinute, setRecMinute] = useState(0);
 
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [newTagName, setNewTagName] = useState('');
+  const [showNewTag, setShowNewTag] = useState(false);
+
+  useEffect(() => {
+    window.api.getTags().then(setAllTags);
+  }, []);
+
   useEffect(() => {
     if (memo) {
       setTitle(memo.title || '');
       setContent(memo.content || '');
       setReminderTime(memo.reminderTime ? toLocalDatetime(memo.reminderTime) : '');
+      setSelectedTags(memo.tags || []);
       if (memo.recurrence && memo.recurrence.type !== 'once') {
         setRecurrenceType(memo.recurrence.type);
         setRecDayOfWeek(memo.recurrence.dayOfWeek ?? 1);
@@ -56,6 +66,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
     const data: MemoFormData = {
       title: title.trim(),
       content: content,
+      tags: selectedTags,
     };
 
     if (recurrenceType === 'once') {
@@ -109,6 +120,31 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
     return '';
   }
 
+  const TAG_COLORS = ['#007aff', '#34c759', '#ff9500', '#ff3b30', '#af52de', '#5ac8fa', '#ff2d55', '#8e8e93'];
+
+  const toggleTag = (tagName: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tagName) ? prev.filter((t) => t !== tagName) : [...prev, tagName]
+    );
+  };
+
+  const handleAddTag = async () => {
+    const name = newTagName.trim();
+    if (!name) return;
+    if (allTags.some((t) => t.name === name)) {
+      if (!selectedTags.includes(name)) setSelectedTags([...selectedTags, name]);
+      setNewTagName('');
+      setShowNewTag(false);
+      return;
+    }
+    const color = TAG_COLORS[allTags.length % TAG_COLORS.length];
+    const tag = await window.api.addTag({ name, color });
+    setAllTags([...allTags, tag]);
+    setSelectedTags([...selectedTags, tag.name]);
+    setNewTagName('');
+    setShowNewTag(false);
+  };
+
   return (
     <form className="memo-form" onSubmit={handleSubmit}>
       <h2>{memo ? '编辑备忘录' : '新建备忘录'}</h2>
@@ -124,6 +160,39 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
           autoFocus
           required
         />
+      </div>
+
+      <div className="form-group">
+        <label>标签</label>
+        <div className="tag-selector">
+          {allTags.map((tag) => (
+            <button
+              key={tag.id}
+              type="button"
+              className={`tag-chip ${selectedTags.includes(tag.name) ? 'selected' : ''}`}
+              style={{ '--tag-color': tag.color } as React.CSSProperties}
+              onClick={() => toggleTag(tag.name)}
+            >
+              {tag.name}
+            </button>
+          ))}
+          {showNewTag ? (
+            <div className="new-tag-input">
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } if (e.key === 'Escape') setShowNewTag(false); }}
+                placeholder="标签名..."
+                autoFocus
+              />
+              <button type="button" className="new-tag-confirm" onClick={handleAddTag}>✓</button>
+              <button type="button" className="new-tag-cancel" onClick={() => setShowNewTag(false)}>✕</button>
+            </div>
+          ) : (
+            <button type="button" className="tag-add-btn" onClick={() => setShowNewTag(true)}>+ 新标签</button>
+          )}
+        </div>
       </div>
 
       <div className="form-group">

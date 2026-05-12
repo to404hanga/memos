@@ -9,6 +9,10 @@ contextBridge.exposeInMainWorld('api', {
   toggleComplete: (id) => ipcRenderer.invoke('toggle-complete', id),
   selectImage: () => ipcRenderer.invoke('select-image'),
   getImagePath: (fileName) => ipcRenderer.invoke('get-image-path', fileName),
+  getTags: () => ipcRenderer.invoke('get-tags'),
+  addTag: (tag) => ipcRenderer.invoke('add-tag', tag),
+  updateTag: (tag) => ipcRenderer.invoke('update-tag', tag),
+  deleteTag: (id) => ipcRenderer.invoke('delete-tag', id),
   onReminder: (callback) => {
     ipcRenderer.on('reminder-triggered', (_, data) => callback(data));
   },

@@ -76,6 +76,13 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete }: MemoItemP
         </div>
         <div className="memo-content" onClick={() => hasRichContent ? setExpanded(!expanded) : onToggle(memo.id)}>
           <h3 className="memo-title">{memo.title}</h3>
+          {memo.tags && memo.tags.length > 0 && (
+            <div className="memo-tags">
+              {memo.tags.map((tag) => (
+                <span key={tag} className="memo-tag-badge">{tag}</span>
+              ))}
+            </div>
+          )}
           {memo.content && (
             expanded ? (
               <div className="memo-desc-rich">

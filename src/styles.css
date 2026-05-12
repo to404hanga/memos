@@ -170,6 +170,128 @@ input, textarea, button {
   transform: scale(0.97);
 }
 
+/* ===== 标签筛选栏 ===== */
+.tag-filter {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.tag-filter-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1.5px solid transparent;
+  padding: 3px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tag-filter-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.tag-filter-btn.active {
+  background: var(--tag-color, #007aff);
+  color: #fff;
+  border-color: var(--tag-color, #007aff);
+}
+
+/* ===== 标签选择器（表单内） ===== */
+.tag-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tag-chip {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1.5px solid #ddd;
+  padding: 4px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tag-chip:hover {
+  border-color: var(--tag-color, #007aff);
+  color: var(--tag-color, #007aff);
+}
+
+.tag-chip.selected {
+  background: var(--tag-color, #007aff);
+  border-color: var(--tag-color, #007aff);
+  color: #fff;
+}
+
+.tag-add-btn {
+  background: none;
+  border: 1.5px dashed #ccc;
+  padding: 4px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tag-add-btn:hover {
+  border-color: #007aff;
+  color: #007aff;
+}
+
+.new-tag-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.new-tag-input input {
+  width: 80px;
+  padding: 4px 8px;
+  border: 1.5px solid #007aff;
+  border-radius: 8px;
+  font-size: 12px;
+  outline: none;
+  font-family: inherit;
+}
+
+.new-tag-confirm, .new-tag-cancel {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px;
+  line-height: 1;
+}
+
+.new-tag-confirm { color: #34c759; }
+.new-tag-cancel { color: #ff3b30; }
+
+/* ===== 备忘项标签 ===== */
+.memo-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.memo-tag-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+}
+
 /* ===== 模态框 ===== */
 .modal-overlay {
   position: fixed;
