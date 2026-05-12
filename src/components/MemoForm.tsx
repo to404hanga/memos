@@ -4,7 +4,7 @@ import type { Memo, MemoFormData, Recurrence, Tag } from '../../types/global';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-type RecurrenceType = 'once' | 'daily' | 'weekly' | 'monthly';
+type RecurrenceType = 'once' | 'daily' | 'workday' | 'weekly' | 'monthly';
 type EditorMode = 'split' | 'edit' | 'preview';
 
 interface MemoFormProps {
@@ -195,6 +195,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
     }
     const timeStr = `${String(rem.hour ?? 0).padStart(2, '0')}:${String(rem.minute ?? 0).padStart(2, '0')}`;
     if (rem.type === 'daily') return `每天 ${timeStr}`;
+    if (rem.type === 'workday') return `每个工作日 ${timeStr}`;
     if (rem.type === 'weekly') return `每${WEEKDAYS[rem.dayOfWeek ?? 0]} ${timeStr}`;
     if (rem.type === 'monthly') return `每月${rem.dayOfMonth ?? 1}号 ${timeStr}`;
     return '';
@@ -372,6 +373,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
               >
                 <option value="once">单次</option>
                 <option value="daily">每天</option>
+                <option value="workday">每个工作日</option>
                 <option value="weekly">每周</option>
                 <option value="monthly">每月</option>
               </select>

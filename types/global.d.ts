@@ -1,5 +1,5 @@
 export interface Recurrence {
-  type: 'once' | 'daily' | 'weekly' | 'monthly';
+  type: 'once' | 'daily' | 'workday' | 'weekly' | 'monthly';
   time?: string;
   hour?: number;
   minute?: number;
