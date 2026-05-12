@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MarkdownView from './MarkdownView';
 import type { Memo, MemoFormData, Recurrence, Tag } from '../../types/global';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 type RecurrenceType = 'once' | 'daily' | 'weekly' | 'monthly';
+type EditorMode = 'split' | 'edit' | 'preview';
 
 interface MemoFormProps {
   memo: Memo | null;
@@ -16,8 +17,9 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [reminderTime, setReminderTime] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
+  const [editorMode, setEditorMode] = useState<EditorMode>('split');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('once');
   const [recDayOfWeek, setRecDayOfWeek] = useState(1);
@@ -91,20 +93,59 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
   const handleInsertImage = async () => {
     const result = await window.api.selectImage();
     if (!result) return;
-    const mdImage = `![图片](${result.filePath})`;
+    insertAtCursor(`![图片](${result.filePath})`);
+  };
+
+  const insertAtCursor = useCallback((text: string, wrap?: { before: string; after: string }) => {
     const ta = textareaRef.current;
-    if (ta) {
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const newContent = content.substring(0, start) + mdImage + content.substring(end);
-      setContent(newContent);
-      setTimeout(() => {
-        ta.selectionStart = ta.selectionEnd = start + mdImage.length;
-        ta.focus();
-      }, 0);
-    } else {
-      setContent(content + '\n' + mdImage);
+    if (!ta) {
+      setContent((prev) => prev + text);
+      return;
     }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = content.substring(start, end);
+
+    let insertion: string;
+    let cursorPos: number;
+    if (wrap && selected) {
+      insertion = wrap.before + selected + wrap.after;
+      cursorPos = start + insertion.length;
+    } else if (wrap) {
+      insertion = wrap.before + wrap.after;
+      cursorPos = start + wrap.before.length;
+    } else {
+      insertion = text;
+      cursorPos = start + text.length;
+    }
+
+    const newContent = content.substring(0, start) + insertion + content.substring(end);
+    setContent(newContent);
+    setTimeout(() => {
+      ta.selectionStart = ta.selectionEnd = cursorPos;
+      ta.focus();
+    }, 0);
+  }, [content]);
+
+  const mdToolbar = [
+    { label: 'B', title: '粗体', action: () => insertAtCursor('', { before: '**', after: '**' }) },
+    { label: 'I', title: '斜体', action: () => insertAtCursor('', { before: '*', after: '*' }) },
+    { label: 'H', title: '标题', action: () => insertAtCursor('## ') },
+    { label: '~', title: '删除线', action: () => insertAtCursor('', { before: '~~', after: '~~' }) },
+    { label: '<>', title: '代码', action: () => insertAtCursor('', { before: '`', after: '`' }) },
+    { label: '—', title: '分割线', action: () => insertAtCursor('\n---\n') },
+    { label: '•', title: '列表', action: () => insertAtCursor('- ') },
+    { label: '1.', title: '有序列表', action: () => insertAtCursor('1. ') },
+    { label: '>', title: '引用', action: () => insertAtCursor('> ') },
+    { label: '🔗', title: '链接', action: () => insertAtCursor('[链接文字](https://)') },
+  ];
+
+  const handleEditorScroll = () => {
+    const ta = textareaRef.current;
+    const pv = previewRef.current;
+    if (!ta || !pv) return;
+    const ratio = ta.scrollTop / (ta.scrollHeight - ta.clientHeight || 1);
+    pv.scrollTop = ratio * (pv.scrollHeight - pv.clientHeight);
   };
 
   const now = new Date();
@@ -195,42 +236,62 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
         </div>
       </div>
 
-      <div className="form-group">
-        <div className="content-label-row">
-          <label htmlFor="content">内容</label>
-          <div className="content-toolbar">
+      <div className="form-group editor-group">
+        <div className="editor-header">
+          <label>内容</label>
+          <div className="editor-toolbar">
+            {mdToolbar.map((btn) => (
+              <button key={btn.title} type="button" className="md-tool-btn" onClick={btn.action} title={btn.title}>
+                {btn.label}
+              </button>
+            ))}
+            <span className="toolbar-divider" />
             <button type="button" className="toolbar-btn" onClick={handleInsertImage} title="插入图片">
               🖼️
             </button>
-            <button
-              type="button"
-              className={`toolbar-btn ${showPreview ? 'active' : ''}`}
-              onClick={() => setShowPreview(!showPreview)}
-              title="预览 Markdown"
-            >
-              {showPreview ? '编辑' : '预览'}
-            </button>
+            <span className="toolbar-divider" />
+            <div className="editor-mode-tabs">
+              {([
+                { key: 'split' as const, label: '分栏' },
+                { key: 'edit' as const, label: '编辑' },
+                { key: 'preview' as const, label: '预览' },
+              ]).map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  className={`mode-tab ${editorMode === m.key ? 'active' : ''}`}
+                  onClick={() => setEditorMode(m.key)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        {showPreview ? (
-          <div className="content-preview">
-            {content ? (
-              <MarkdownView content={content} />
-            ) : (
-              <p className="preview-empty">暂无内容</p>
-            )}
-          </div>
-        ) : (
-          <textarea
-            id="content"
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="支持 Markdown 格式，可插入图片..."
-            rows={6}
-          />
-        )}
-        <div className="md-hint">支持 **粗体**、*斜体*、# 标题、- 列表、`代码` 等 Markdown 语法</div>
+        <div className={`editor-container mode-${editorMode}`}>
+          {editorMode !== 'preview' && (
+            <div className="editor-pane">
+              <textarea
+                id="content"
+                ref={textareaRef}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onScroll={handleEditorScroll}
+                placeholder="支持 Markdown 格式..."
+                spellCheck={false}
+              />
+            </div>
+          )}
+          {editorMode !== 'edit' && (
+            <div className="preview-pane" ref={previewRef}>
+              {content ? (
+                <MarkdownView content={content} />
+              ) : (
+                <p className="preview-empty">预览区域</p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="form-group">
