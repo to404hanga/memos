@@ -16,18 +16,13 @@ interface MemoFormProps {
 export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): React.ReactElement {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [reminderTime, setReminderTime] = useState('');
   const [editorMode, setEditorMode] = useState<EditorMode>('split');
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const dragCountRef = useRef(0);
 
-  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('once');
-  const [recDayOfWeek, setRecDayOfWeek] = useState(1);
-  const [recDayOfMonth, setRecDayOfMonth] = useState(1);
-  const [recHour, setRecHour] = useState(9);
-  const [recMinute, setRecMinute] = useState(0);
+  const [reminders, setReminders] = useState<Recurrence[]>([]);
 
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -42,17 +37,8 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
     if (memo) {
       setTitle(memo.title || '');
       setContent(memo.content || '');
-      setReminderTime(memo.reminderTime ? toLocalDatetime(memo.reminderTime) : '');
       setSelectedTags(memo.tags || []);
-      if (memo.recurrence && memo.recurrence.type !== 'once') {
-        setRecurrenceType(memo.recurrence.type);
-        setRecDayOfWeek(memo.recurrence.dayOfWeek ?? 1);
-        setRecDayOfMonth(memo.recurrence.dayOfMonth ?? 1);
-        setRecHour(memo.recurrence.hour ?? 9);
-        setRecMinute(memo.recurrence.minute ?? 0);
-      } else {
-        setRecurrenceType('once');
-      }
+      setReminders(memo.reminders && memo.reminders.length > 0 ? memo.reminders : []);
     }
   }, [memo]);
 
@@ -71,22 +57,8 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
       title: title.trim(),
       content: content,
       tags: selectedTags,
+      reminders: reminders,
     };
-
-    if (recurrenceType === 'once') {
-      data.reminderTime = reminderTime ? new Date(reminderTime).toISOString() : null;
-      data.recurrence = null;
-    } else {
-      const rec: Recurrence = {
-        type: recurrenceType,
-        hour: recHour,
-        minute: recMinute,
-      };
-      if (recurrenceType === 'weekly') rec.dayOfWeek = recDayOfWeek;
-      if (recurrenceType === 'monthly') rec.dayOfMonth = recDayOfMonth;
-      data.recurrence = rec;
-      data.reminderTime = null;
-    }
 
     if (memo) data.id = memo.id;
     onSubmit(data);
@@ -203,11 +175,28 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
   const localNow = new Date(now.getTime() - offset * 60000);
   const minDatetime = localNow.toISOString().slice(0, 16);
 
-  function getRecurrencePreview(): string {
-    const timeStr = `${String(recHour).padStart(2, '0')}:${String(recMinute).padStart(2, '0')}`;
-    if (recurrenceType === 'daily') return `每天 ${timeStr}`;
-    if (recurrenceType === 'weekly') return `每${WEEKDAYS[recDayOfWeek]} ${timeStr}`;
-    if (recurrenceType === 'monthly') return `每月 ${recDayOfMonth} 号 ${timeStr}`;
+  const addReminder = () => {
+    setReminders([...reminders, { type: 'once', time: '' }]);
+  };
+
+  const removeReminder = (index: number) => {
+    setReminders(reminders.filter((_, i) => i !== index));
+  };
+
+  const updateReminder = (index: number, updated: Recurrence) => {
+    const newReminders = [...reminders];
+    newReminders[index] = updated;
+    setReminders(newReminders);
+  };
+
+  function getReminderLabel(rem: Recurrence): string {
+    if (rem.type === 'once' && rem.time) {
+      return toLocalDatetime(rem.time).replace('T', ' ');
+    }
+    const timeStr = `${String(rem.hour ?? 0).padStart(2, '0')}:${String(rem.minute ?? 0).padStart(2, '0')}`;
+    if (rem.type === 'daily') return `每天 ${timeStr}`;
+    if (rem.type === 'weekly') return `每${WEEKDAYS[rem.dayOfWeek ?? 0]} ${timeStr}`;
+    if (rem.type === 'monthly') return `每月${rem.dayOfMonth ?? 1}号 ${timeStr}`;
     return '';
   }
 
@@ -359,103 +348,96 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
       </div>
 
       <div className="form-group">
-        <label>提醒方式</label>
-        <div className="recurrence-tabs">
-          {([
-            { key: 'once' as const, label: '单次' },
-            { key: 'daily' as const, label: '每天' },
-            { key: 'weekly' as const, label: '每周' },
-            { key: 'monthly' as const, label: '每月' },
-          ]).map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`rec-tab ${recurrenceType === item.key ? 'active' : ''}`}
-              onClick={() => setRecurrenceType(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
+        <div className="content-label-row">
+          <label>提醒</label>
+          <button type="button" className="tag-add-btn" onClick={addReminder}>+ 添加提醒</button>
         </div>
+        {reminders.length === 0 && (
+          <p className="no-reminders">暂无提醒，点击「+ 添加提醒」设置</p>
+        )}
+        <div className="reminders-list">
+          {reminders.map((rem, idx) => (
+            <div key={idx} className="reminder-row">
+              <select
+                className="rec-select"
+                value={rem.type}
+                onChange={(e) => {
+                  const type = e.target.value as RecurrenceType;
+                  if (type === 'once') {
+                    updateReminder(idx, { type: 'once', time: '' });
+                  } else {
+                    updateReminder(idx, { type, hour: rem.hour ?? 9, minute: rem.minute ?? 0, dayOfWeek: rem.dayOfWeek ?? 1, dayOfMonth: rem.dayOfMonth ?? 1 });
+                  }
+                }}
+              >
+                <option value="once">单次</option>
+                <option value="daily">每天</option>
+                <option value="weekly">每周</option>
+                <option value="monthly">每月</option>
+              </select>
 
-        {recurrenceType === 'once' ? (
-          <div className="rec-once-row">
-            <input
-              id="reminder"
-              type="datetime-local"
-              value={reminderTime}
-              onChange={(e) => setReminderTime(e.target.value)}
-              min={minDatetime}
-            />
-            {reminderTime && (
-              <button type="button" className="clear-time" onClick={() => setReminderTime('')}>
-                清除
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="rec-config">
-            {recurrenceType === 'weekly' && (
-              <div className="rec-row">
-                <span className="rec-label">星期</span>
-                <div className="weekday-picker">
-                  {WEEKDAYS.map((name, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      className={`weekday-btn ${recDayOfWeek === i ? 'active' : ''}`}
-                      onClick={() => setRecDayOfWeek(i)}
-                    >
-                      {name.replace('周', '')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+              {rem.type === 'once' && (
+                <input
+                  type="datetime-local"
+                  className="rem-datetime"
+                  value={rem.time ? toLocalDatetime(rem.time) : ''}
+                  min={minDatetime}
+                  onChange={(e) => updateReminder(idx, { ...rem, time: e.target.value ? new Date(e.target.value).toISOString() : '' })}
+                />
+              )}
 
-            {recurrenceType === 'monthly' && (
-              <div className="rec-row">
-                <span className="rec-label">日期</span>
+              {rem.type === 'weekly' && (
                 <select
                   className="rec-select"
-                  value={recDayOfMonth}
-                  onChange={(e) => setRecDayOfMonth(Number(e.target.value))}
+                  value={rem.dayOfWeek ?? 1}
+                  onChange={(e) => updateReminder(idx, { ...rem, dayOfWeek: Number(e.target.value) })}
+                >
+                  {WEEKDAYS.map((name, i) => (
+                    <option key={i} value={i}>{name}</option>
+                  ))}
+                </select>
+              )}
+
+              {rem.type === 'monthly' && (
+                <select
+                  className="rec-select"
+                  value={rem.dayOfMonth ?? 1}
+                  onChange={(e) => updateReminder(idx, { ...rem, dayOfMonth: Number(e.target.value) })}
                 >
                   {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                    <option key={d} value={d}>{d} 号</option>
+                    <option key={d} value={d}>{d}号</option>
                   ))}
                 </select>
-              </div>
-            )}
+              )}
 
-            <div className="rec-row">
-              <span className="rec-label">时间</span>
-              <div className="time-picker">
-                <select
-                  className="rec-select"
-                  value={recHour}
-                  onChange={(e) => setRecHour(Number(e.target.value))}
-                >
-                  {Array.from({ length: 24 }, (_, i) => i).map((h) => (
-                    <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
-                  ))}
-                </select>
-                <span className="time-sep">:</span>
-                <select
-                  className="rec-select"
-                  value={recMinute}
-                  onChange={(e) => setRecMinute(Number(e.target.value))}
-                >
-                  {Array.from({ length: 60 }, (_, i) => i).map((m) => (
-                    <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-                  ))}
-                </select>
-              </div>
+              {rem.type !== 'once' && (
+                <div className="time-picker">
+                  <select
+                    className="rec-select"
+                    value={rem.hour ?? 9}
+                    onChange={(e) => updateReminder(idx, { ...rem, hour: Number(e.target.value) })}
+                  >
+                    {Array.from({ length: 24 }, (_, i) => i).map((h) => (
+                      <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                  <span className="time-sep">:</span>
+                  <select
+                    className="rec-select"
+                    value={rem.minute ?? 0}
+                    onChange={(e) => updateReminder(idx, { ...rem, minute: Number(e.target.value) })}
+                  >
+                    {Array.from({ length: 60 }, (_, i) => i).map((m) => (
+                      <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button type="button" className="rem-delete" onClick={() => removeReminder(idx)} title="删除此提醒">✕</button>
             </div>
-
-            <div className="rec-preview">🔁 {getRecurrencePreview()}</div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
       <div className="form-actions">

@@ -59,6 +59,15 @@ async function initDatabase() {
     db.run('ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0');
   }
 
+  try {
+    db.run('SELECT reminders FROM memos LIMIT 1');
+  } catch (e) {
+    db.run("ALTER TABLE memos ADD COLUMN reminders TEXT DEFAULT '[]'");
+  }
+
+  // 迁移旧数据：将单个 reminderTime/recurrence 转为 reminders 数组
+  migrateOldReminders();
+
   saveDb();
   console.log(`[DB] SQLite 已初始化: ${dbPath}`);
 }
@@ -67,6 +76,30 @@ function saveDb() {
   const data = db.export();
   const buffer = Buffer.from(data);
   fs.writeFileSync(dbPath, buffer);
+}
+
+function migrateOldReminders() {
+  const stmt = db.prepare("SELECT id, reminder_time, recurrence, reminders FROM memos WHERE (reminder_time IS NOT NULL OR recurrence IS NOT NULL) AND (reminders IS NULL OR reminders = '[]')");
+  const toMigrate = [];
+  while (stmt.step()) toMigrate.push(stmt.getAsObject());
+  stmt.free();
+
+  for (const row of toMigrate) {
+    const reminders = [];
+    const rec = row.recurrence ? JSON.parse(row.recurrence) : null;
+    if (rec && rec.type !== 'once') {
+      reminders.push(rec);
+    } else if (row.reminder_time) {
+      reminders.push({ type: 'once', time: row.reminder_time });
+    }
+    if (reminders.length > 0) {
+      db.run('UPDATE memos SET reminders = ? WHERE id = ?', [JSON.stringify(reminders), row.id]);
+    }
+  }
+  if (toMigrate.length > 0) {
+    saveDb();
+    console.log(`[DB] 迁移了 ${toMigrate.length} 条旧提醒数据`);
+  }
 }
 
 // ===== 数据库操作封装 =====
@@ -94,16 +127,16 @@ function getMemoById(id) {
 
 function insertMemo(memo) {
   db.run(
-    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), memo.createdAt]
+    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, reminders, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), memo.createdAt]
   );
   saveDb();
 }
 
 function updateMemoInDb(memo) {
   db.run(
-    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ? WHERE id = ?',
-    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), memo.id]
+    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ?, reminders = ? WHERE id = ?',
+    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), memo.id]
   );
   saveDb();
 }
@@ -125,6 +158,7 @@ function rowToMemo(row) {
     content: row.content || '',
     reminderTime: row.reminder_time || null,
     recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,
+    reminders: row.reminders ? JSON.parse(row.reminders) : [],
     completed: row.completed === 1,
     pinned: row.pinned === 1,
     tags: row.tags ? JSON.parse(row.tags) : [],
@@ -223,74 +257,108 @@ function getNextOccurrence(recurrence) {
   return null;
 }
 
-function scheduleReminder(memo) {
-  if (activeTimers.has(memo.id)) {
-    clearTimeout(activeTimers.get(memo.id));
-    activeTimers.delete(memo.id);
+function clearMemoTimers(memoId) {
+  const timers = activeTimers.get(memoId);
+  if (timers) {
+    timers.forEach((t) => clearTimeout(t));
+    activeTimers.delete(memoId);
   }
+}
 
+function scheduleReminder(memo) {
+  clearMemoTimers(memo.id);
   if (memo.completed) return;
 
-  let targetDate;
-
-  if (memo.recurrence && memo.recurrence.type !== 'once') {
-    targetDate = getNextOccurrence(memo.recurrence);
-    if (!targetDate) return;
-    updateReminderTime(memo.id, targetDate.toISOString());
-  } else {
-    if (!memo.reminderTime) return;
-    targetDate = new Date(memo.reminderTime);
-  }
-
-  const now = new Date();
-  const delay = targetDate.getTime() - now.getTime();
-
-  console.log(`[提醒] "${memo.title}" 计划于 ${targetDate.toLocaleString()}，延迟 ${Math.round(delay / 1000)}s${memo.recurrence && memo.recurrence.type !== 'once' ? ` (${memo.recurrence.type})` : ''}`);
-
-  if (delay <= 0) {
-    console.log(`[提醒] "${memo.title}" 已过期，跳过`);
-    return;
-  }
-
-  const timer = setTimeout(() => {
-    console.log(`[提醒] 触发: "${memo.title}"`);
-
-    if (Notification.isSupported()) {
-      const recLabel = memo.recurrence && memo.recurrence.type !== 'once' ? ' 🔁' : '';
-      const notification = new Notification({
-        title: `⏰ 备忘录提醒${recLabel}`,
-        body: memo.title,
-        subtitle: memo.content || '',
-        silent: false,
-        urgency: 'critical',
-      });
-      notification.on('click', () => {
-        mainWindow && mainWindow.show();
-      });
-      notification.show();
-    }
-
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-      mainWindow.webContents.send('reminder-triggered', {
-        id: memo.id,
-        title: memo.title,
-        content: memo.content,
-      });
-    }
-
-    activeTimers.delete(memo.id);
-
+  const reminders = memo.reminders || [];
+  // 兼容旧数据
+  if (reminders.length === 0) {
     if (memo.recurrence && memo.recurrence.type !== 'once') {
-      const freshMemo = getMemoById(memo.id);
-      if (freshMemo && !freshMemo.completed) {
-        scheduleReminder(freshMemo);
-      }
+      reminders.push(memo.recurrence);
+    } else if (memo.reminderTime) {
+      reminders.push({ type: 'once', time: memo.reminderTime });
     }
-  }, delay);
+  }
 
-  activeTimers.set(memo.id, timer);
+  if (reminders.length === 0) return;
+
+  const timers = [];
+  let nearestTime = null;
+
+  reminders.forEach((rem, idx) => {
+    let targetDate;
+
+    if (rem.type === 'once') {
+      if (!rem.time) return;
+      targetDate = new Date(rem.time);
+    } else {
+      targetDate = getNextOccurrence(rem);
+      if (!targetDate) return;
+    }
+
+    const now = new Date();
+    const delay = targetDate.getTime() - now.getTime();
+
+    // 记录最近的提醒时间
+    if (delay > 0 && (!nearestTime || targetDate < nearestTime)) {
+      nearestTime = targetDate;
+    }
+
+    const typeLabel = rem.type !== 'once' ? ` (${rem.type})` : '';
+    console.log(`[提醒] "${memo.title}" #${idx + 1} 计划于 ${targetDate.toLocaleString()}，延迟 ${Math.round(delay / 1000)}s${typeLabel}`);
+
+    if (delay <= 0) {
+      console.log(`[提醒] "${memo.title}" #${idx + 1} 已过期，跳过`);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      console.log(`[提醒] 触发: "${memo.title}" #${idx + 1}`);
+
+      if (Notification.isSupported()) {
+        const recLabel = rem.type !== 'once' ? ' 🔁' : '';
+        const notification = new Notification({
+          title: `⏰ 备忘录提醒${recLabel}`,
+          body: memo.title,
+          subtitle: memo.content || '',
+          silent: false,
+          urgency: 'critical',
+        });
+        notification.on('click', () => {
+          mainWindow && mainWindow.show();
+        });
+        notification.show();
+      }
+
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.webContents.send('reminder-triggered', {
+          id: memo.id,
+          title: memo.title,
+          content: memo.content,
+        });
+      }
+
+      // 周期性提醒自动调度下一次
+      if (rem.type !== 'once') {
+        const freshMemo = getMemoById(memo.id);
+        if (freshMemo && !freshMemo.completed) {
+          scheduleReminder(freshMemo);
+        }
+      }
+    }, delay);
+
+    timers.push(timer);
+  });
+
+  if (timers.length > 0) {
+    activeTimers.set(memo.id, timers);
+  }
+
+  // 更新 reminder_time 为最近的提醒时间（用于时间轴排序显示）
+  if (nearestTime) {
+    updateReminderTime(memo.id, nearestTime.toISOString());
+  }
 }
 
 function loadAllReminders() {
@@ -357,6 +425,7 @@ ipcMain.handle('add-memo', (_, memo) => {
     content: memo.content || '',
     reminderTime: memo.reminderTime || null,
     recurrence: memo.recurrence || null,
+    reminders: memo.reminders || [],
     completed: false,
     tags: memo.tags || [],
     createdAt: new Date().toISOString(),
@@ -377,10 +446,7 @@ ipcMain.handle('update-memo', (_, updatedMemo) => {
 
 ipcMain.handle('delete-memo', (_, id) => {
   deleteMemoFromDb(id);
-  if (activeTimers.has(id)) {
-    clearTimeout(activeTimers.get(id));
-    activeTimers.delete(id);
-  }
+  clearMemoTimers(id);
   return true;
 });
 
@@ -389,10 +455,9 @@ ipcMain.handle('toggle-complete', (_, id) => {
   if (!memo) return null;
   memo.completed = !memo.completed;
   updateMemoInDb(memo);
-  if (memo.completed && activeTimers.has(id)) {
-    clearTimeout(activeTimers.get(id));
-    activeTimers.delete(id);
-  } else if (!memo.completed) {
+  if (memo.completed) {
+    clearMemoTimers(id);
+  } else {
     scheduleReminder(memo);
   }
   return memo;

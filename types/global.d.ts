@@ -1,5 +1,6 @@
 export interface Recurrence {
   type: 'once' | 'daily' | 'weekly' | 'monthly';
+  time?: string;
   hour?: number;
   minute?: number;
   dayOfWeek?: number;
@@ -18,6 +19,7 @@ export interface Memo {
   content: string;
   reminderTime: string | null;
   recurrence: Recurrence | null;
+  reminders: Recurrence[];
   completed: boolean;
   pinned: boolean;
   tags: string[];
@@ -30,6 +32,7 @@ export interface MemoFormData {
   content: string;
   reminderTime?: string | null;
   recurrence?: Recurrence | null;
+  reminders?: Recurrence[];
   tags?: string[];
 }
 
