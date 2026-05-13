@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MarkdownView from './MarkdownView';
-import type { Memo, MemoFormData, Recurrence, Tag } from '../../types/global';
+import type { Memo, MemoFormData, Recurrence, Tag, MutePeriod } from '../../types/global';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
@@ -23,6 +23,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
   const dragCountRef = useRef(0);
 
   const [reminders, setReminders] = useState<Recurrence[]>([]);
+  const [mutePeriods, setMutePeriods] = useState<MutePeriod[]>([]);
 
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -39,6 +40,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
       setContent(memo.content || '');
       setSelectedTags(memo.tags || []);
       setReminders(memo.reminders && memo.reminders.length > 0 ? memo.reminders : []);
+      setMutePeriods(memo.mutePeriods || []);
     }
   }, [memo]);
 
@@ -58,6 +60,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
       content: content,
       tags: selectedTags,
       reminders: reminders,
+      mutePeriods: mutePeriods.filter((p) => p.from && p.to),
     };
 
     if (memo) data.id = memo.id;
@@ -441,6 +444,48 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
           ))}
         </div>
       </div>
+
+      {reminders.length > 0 && (
+        <div className="form-group">
+          <div className="content-label-row">
+            <label>静默期（不提醒的日期范围）</label>
+            <button type="button" className="tag-add-btn" onClick={() => setMutePeriods([...mutePeriods, { from: '', to: '' }])}>+ 添加</button>
+          </div>
+          {mutePeriods.length === 0 && (
+            <p className="no-reminders">未设置静默期</p>
+          )}
+          <div className="reminders-list">
+            {mutePeriods.map((period, idx) => (
+              <div key={idx} className="reminder-row mute-row">
+                <span className="mute-label">从</span>
+                <input
+                  type="date"
+                  className="rem-datetime"
+                  value={period.from}
+                  onChange={(e) => {
+                    const newPeriods = [...mutePeriods];
+                    newPeriods[idx] = { ...newPeriods[idx], from: e.target.value };
+                    setMutePeriods(newPeriods);
+                  }}
+                />
+                <span className="mute-label">至</span>
+                <input
+                  type="date"
+                  className="rem-datetime"
+                  value={period.to}
+                  min={period.from || undefined}
+                  onChange={(e) => {
+                    const newPeriods = [...mutePeriods];
+                    newPeriods[idx] = { ...newPeriods[idx], to: e.target.value };
+                    setMutePeriods(newPeriods);
+                  }}
+                />
+                <button type="button" className="rem-delete" onClick={() => setMutePeriods(mutePeriods.filter((_, i) => i !== idx))}>✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="form-actions">
         <button type="button" className="btn-cancel" onClick={onCancel}>

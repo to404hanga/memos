@@ -50,7 +50,13 @@ export default function CalendarView({ memos, onEdit, onToggle }: CalendarViewPr
     const map: Record<string, Memo[]> = {};
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
+    const isMutedForMemo = (key: string, memo: Memo): boolean => {
+      if (!memo.mutePeriods || memo.mutePeriods.length === 0) return false;
+      return memo.mutePeriods.some((p) => key >= p.from && key <= p.to);
+    };
+
     const addToDate = (key: string, memo: Memo) => {
+      if (isMutedForMemo(key, memo)) return;
       if (!map[key]) map[key] = [];
       if (!map[key].some((m) => m.id === memo.id)) {
         map[key].push(memo);
@@ -73,17 +79,15 @@ export default function CalendarView({ memos, onEdit, onToggle }: CalendarViewPr
           const key = formatKey(new Date(rem.time));
           addToDate(key, m);
         } else if (rem.type === 'daily' || rem.type === 'workday') {
-          // 每天/工作日：当月每一天都标记
           for (let d = 1; d <= daysInMonth; d++) {
             const date = new Date(year, month, d);
             if (rem.type === 'workday') {
               const day = date.getDay();
-              if (day === 0 || day === 6) continue; // 简化判断，不含调休
+              if (day === 0 || day === 6) continue;
             }
             addToDate(formatKey(date), m);
           }
         } else if (rem.type === 'weekly' && rem.dayOfWeek !== undefined) {
-          // 每周：当月所有匹配的星期几
           for (let d = 1; d <= daysInMonth; d++) {
             const date = new Date(year, month, d);
             if (date.getDay() === rem.dayOfWeek) {
@@ -91,7 +95,6 @@ export default function CalendarView({ memos, onEdit, onToggle }: CalendarViewPr
             }
           }
         } else if (rem.type === 'monthly' && rem.dayOfMonth !== undefined) {
-          // 每月：当月对应日期
           if (rem.dayOfMonth <= daysInMonth) {
             const key = formatKey(new Date(year, month, rem.dayOfMonth));
             addToDate(key, m);

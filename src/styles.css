@@ -24,6 +24,7 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg-primary: #1c1c1e;
   --bg-secondary: #2c2c2e;
   --bg-tertiary: #3a3a3c;
@@ -490,7 +491,7 @@ input, textarea, button {
 .form-group input:focus,
 .form-group textarea:focus {
   border-color: #007aff;
-  background: #fff;
+  background: var(--bg-secondary);
 }
 
 .form-group textarea {
@@ -587,18 +588,18 @@ input, textarea, button {
 }
 
 .mode-tab.active {
-  background: #fff;
-  color: #333;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .editor-container {
   display: flex;
-  border: 1.5px solid #e0e0e0;
+  border: 1.5px solid var(--border-input);
   border-radius: 10px;
   overflow: hidden;
   height: 260px;
-  background: #fff;
+  background: var(--bg-secondary);
   transition: border-color 0.2s;
 }
 
@@ -622,21 +623,21 @@ input, textarea, button {
   font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
   line-height: 1.6;
   resize: none;
-  background: #fafafa;
-  color: #333;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
   tab-size: 2;
 }
 
 .editor-container.mode-edit .editor-pane textarea {
-  background: #fff;
+  background: var(--bg-secondary);
 }
 
 .preview-pane {
   flex: 1;
   overflow-y: auto;
   padding: 12px 14px;
-  border-left: 1px solid #e8e8e8;
-  background: #fff;
+  border-left: 1px solid var(--border);
+  background: var(--bg-secondary);
   min-width: 0;
 }
 
@@ -717,19 +718,20 @@ input, textarea, button {
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  background: #fafafa;
-  border: 1px solid #eee;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
   border-radius: 10px;
   flex-wrap: wrap;
 }
 
 .rem-datetime {
   padding: 5px 10px;
-  border: 1.5px solid #ddd;
+  border: 1.5px solid var(--border-input);
   border-radius: 8px;
   font-size: 13px;
   font-family: inherit;
-  background: #fff;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   outline: none;
   flex: 1;
   min-width: 180px;
@@ -756,6 +758,18 @@ input, textarea, button {
   background: rgba(255, 59, 48, 0.1);
 }
 
+.mute-row {
+  background: rgba(255, 149, 0, 0.05) !important;
+  border-color: rgba(255, 149, 0, 0.15) !important;
+}
+
+.mute-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
 .content-label-row {
   display: flex;
   justify-content: space-between;
@@ -769,11 +783,12 @@ input, textarea, button {
 
 .rec-select {
   padding: 5px 10px;
-  border: 1.5px solid #ddd;
+  border: 1.5px solid var(--border-input);
   border-radius: 8px;
   font-size: 13px;
   font-family: inherit;
-  background: #fff;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   outline: none;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -842,12 +857,12 @@ input, textarea, button {
 }
 
 .btn-cancel {
-  background: #f0f0f0;
-  color: #666;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .btn-cancel:hover {
-  background: #e5e5e5;
+  background: var(--bg-hover);
 }
 
 .btn-submit {
@@ -1682,6 +1697,21 @@ input, textarea, button {
   background: var(--accent-bg);
 }
 
+.cal-day.muted {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(255, 149, 0, 0.08) 3px,
+    rgba(255, 149, 0, 0.08) 6px
+  );
+}
+
+.cal-day.muted .cal-dot {
+  background: #ff9500;
+  opacity: 0.4;
+}
+
 .cal-day-num {
   font-size: 14px;
   font-weight: 500;
@@ -1894,20 +1924,6 @@ input, textarea, button {
   color: var(--text-secondary);
 }
 
-[data-theme="dark"] .editor-pane textarea {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-[data-theme="dark"] .preview-pane {
-  background: var(--bg-secondary);
-  border-left-color: var(--border);
-}
-
-[data-theme="dark"] .editor-container {
-  border-color: var(--border-input);
-}
-
 [data-theme="dark"] .tl-center-card {
   background: var(--card-bg);
   border-color: var(--border);
@@ -1940,17 +1956,6 @@ input, textarea, button {
   color: var(--text-secondary);
 }
 
-[data-theme="dark"] .rec-select {
-  background: var(--bg-tertiary);
-  border-color: var(--border-input);
-  color: var(--text-primary);
-}
-
-[data-theme="dark"] .reminder-row {
-  background: var(--bg-tertiary);
-  border-color: var(--border-input);
-}
-
 [data-theme="dark"] .tag-chip {
   background: var(--tag-bg);
   border-color: var(--border-input);
@@ -1972,5 +1977,56 @@ input, textarea, button {
 [data-theme="dark"] .markdown-body blockquote {
   color: var(--text-secondary);
   background: var(--accent-bg);
+}
+
+[data-theme="dark"] .editor-mode-tabs {
+  background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .toolbar-divider {
+  background: var(--border-input);
+}
+
+[data-theme="dark"] .toolbar-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .tag-add-btn {
+  border-color: var(--border-input);
+  color: var(--text-tertiary);
+}
+
+[data-theme="dark"] .new-tag-input input {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+[data-theme="dark"] .tag-chip:hover {
+  color: var(--accent);
+}
+
+[data-theme="dark"] .filter-tabs {
+  background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .tl-center-node {
+  background: var(--bg-secondary);
+  border-color: #48484a;
+}
+
+[data-theme="dark"] .tl-center-arrow {
+  background: var(--card-bg);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .rem-datetime::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+[data-theme="dark"] .rec-select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 

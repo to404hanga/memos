@@ -7,6 +7,11 @@ export interface Recurrence {
   dayOfMonth?: number;
 }
 
+export interface MutePeriod {
+  from: string; // ISO date string (YYYY-MM-DD)
+  to: string;   // ISO date string (YYYY-MM-DD)
+}
+
 export interface Tag {
   id: string;
   name: string;
@@ -20,6 +25,7 @@ export interface Memo {
   reminderTime: string | null;
   recurrence: Recurrence | null;
   reminders: Recurrence[];
+  mutePeriods: MutePeriod[];
   completed: boolean;
   pinned: boolean;
   tags: string[];
@@ -34,6 +40,7 @@ export interface MemoFormData {
   reminderTime?: string | null;
   recurrence?: Recurrence | null;
   reminders?: Recurrence[];
+  mutePeriods?: MutePeriod[];
   tags?: string[];
 }
 

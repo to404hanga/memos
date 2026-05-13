@@ -71,6 +71,12 @@ async function initDatabase() {
     db.run('ALTER TABLE memos ADD COLUMN deleted_at TEXT DEFAULT NULL');
   }
 
+  try {
+    db.run('SELECT mute_periods FROM memos LIMIT 1');
+  } catch (e) {
+    db.run("ALTER TABLE memos ADD COLUMN mute_periods TEXT DEFAULT '[]'");
+  }
+
   // 迁移旧数据：将单个 reminderTime/recurrence 转为 reminders 数组
   migrateOldReminders();
 
@@ -149,16 +155,16 @@ function getMemoById(id) {
 
 function insertMemo(memo) {
   db.run(
-    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, reminders, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), memo.createdAt]
+    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, reminders, mute_periods, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), memo.createdAt]
   );
   saveDb();
 }
 
 function updateMemoInDb(memo) {
   db.run(
-    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ?, reminders = ? WHERE id = ?',
-    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), memo.id]
+    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ?, reminders = ?, mute_periods = ? WHERE id = ?',
+    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), memo.id]
   );
   saveDb();
 }
@@ -181,6 +187,7 @@ function rowToMemo(row) {
     reminderTime: row.reminder_time || null,
     recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,
     reminders: row.reminders ? JSON.parse(row.reminders) : [],
+    mutePeriods: row.mute_periods ? JSON.parse(row.mute_periods) : [],
     completed: row.completed === 1,
     pinned: row.pinned === 1,
     tags: row.tags ? JSON.parse(row.tags) : [],
@@ -353,6 +360,13 @@ function scheduleReminder(memo) {
   clearMemoTimers(memo.id);
   if (memo.completed) return;
 
+  const mutePeriods = memo.mutePeriods || [];
+
+  function isInMutePeriod(date) {
+    const dateKey = formatDateKey(date);
+    return mutePeriods.some((p) => dateKey >= p.from && dateKey <= p.to);
+  }
+
   const reminders = memo.reminders || [];
   // 兼容旧数据
   if (reminders.length === 0) {
@@ -374,9 +388,22 @@ function scheduleReminder(memo) {
     if (rem.type === 'once') {
       if (!rem.time) return;
       targetDate = new Date(rem.time);
+      // 单次提醒在静默期内则跳过
+      if (isInMutePeriod(targetDate)) {
+        console.log(`[提醒] "${memo.title}" #${idx + 1} 在静默期内，跳过`);
+        return;
+      }
     } else {
       targetDate = getNextOccurrence(rem);
       if (!targetDate) return;
+      // 周期提醒：如果在静默期内，向后寻找最多 60 天
+      let attempts = 0;
+      while (isInMutePeriod(targetDate) && attempts < 60) {
+        targetDate.setDate(targetDate.getDate() + 1);
+        targetDate.setHours(rem.hour || 0, rem.minute || 0, 0, 0);
+        attempts++;
+      }
+      if (attempts >= 60) return;
     }
 
     const now = new Date();
@@ -510,6 +537,7 @@ ipcMain.handle('add-memo', (_, memo) => {
     reminderTime: memo.reminderTime || null,
     recurrence: memo.recurrence || null,
     reminders: memo.reminders || [],
+    mutePeriods: memo.mutePeriods || [],
     completed: false,
     tags: memo.tags || [],
     createdAt: new Date().toISOString(),
