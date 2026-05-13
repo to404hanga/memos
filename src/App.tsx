@@ -6,6 +6,7 @@ import type { Memo, MemoFormData, ReminderData, Tag } from '../types/global';
 
 type FilterType = 'all' | 'active' | 'completed';
 type ViewType = 'list' | 'timeline' | 'trash';
+type ThemeMode = 'auto' | 'light' | 'dark';
 
 export default function App(): React.ReactElement {
   const [memos, setMemos] = useState<Memo[]>([]);
@@ -21,6 +22,24 @@ export default function App(): React.ReactElement {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [filterTag, setFilterTag] = useState<string | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    return (localStorage.getItem('theme') as ThemeMode) || 'auto';
+  });
+
+  // 主题应用
+  useEffect(() => {
+    const applyTheme = () => {
+      let dark = false;
+      if (themeMode === 'dark') dark = true;
+      else if (themeMode === 'auto') dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    };
+    applyTheme();
+    localStorage.setItem('theme', themeMode);
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener('change', applyTheme);
+    return () => mq.removeEventListener('change', applyTheme);
+  }, [themeMode]);
 
   const loadMemos = useCallback(async () => {
     if (searchQuery.trim()) {
@@ -183,9 +202,16 @@ export default function App(): React.ReactElement {
               回收站
             </button>
           </div>
-          <button className="add-btn" onClick={() => { setEditingMemo(null); setShowForm(true); }}>
-            + 新建
-          </button>
+          <div className="header-right">
+            <button className="add-btn" onClick={() => { setEditingMemo(null); setShowForm(true); }}>
+              + 新建
+            </button>
+            <div className="theme-toggle">
+              <button className={`theme-btn ${themeMode === 'auto' ? 'active' : ''}`} onClick={() => setThemeMode('auto')} title="跟随系统">🌗</button>
+              <button className={`theme-btn ${themeMode === 'light' ? 'active' : ''}`} onClick={() => setThemeMode('light')} title="浅色">☀️</button>
+              <button className={`theme-btn ${themeMode === 'dark' ? 'active' : ''}`} onClick={() => setThemeMode('dark')} title="深色">🌙</button>
+            </div>
+          </div>
         </div>
         {view === 'list' && (
           <div className="sub-filter">
