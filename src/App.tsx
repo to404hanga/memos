@@ -3,10 +3,11 @@ import MemoForm from './components/MemoForm';
 import MemoList from './components/MemoList';
 import Timeline from './components/Timeline';
 import CalendarView from './components/CalendarView';
+import KanbanView from './components/KanbanView';
 import type { Memo, MemoFormData, ReminderData, Tag } from '../types/global';
 
 type FilterType = 'all' | 'active' | 'completed';
-type ViewType = 'list' | 'timeline' | 'calendar' | 'trash';
+type ViewType = 'list' | 'timeline' | 'calendar' | 'kanban' | 'trash';
 type ThemeMode = 'auto' | 'light' | 'dark';
 
 export default function App(): React.ReactElement {
@@ -203,6 +204,12 @@ export default function App(): React.ReactElement {
               日历
             </button>
             <button
+              className={`filter-btn ${view === 'kanban' ? 'active' : ''}`}
+              onClick={() => setView('kanban')}
+            >
+              看板
+            </button>
+            <button
               className={`filter-btn ${view === 'trash' ? 'active' : ''}`}
               onClick={() => { setView('trash'); loadTrash(); }}
             >
@@ -267,7 +274,7 @@ export default function App(): React.ReactElement {
         </div>
       )}
 
-      <div className={`app-content ${view === 'calendar' ? 'no-scroll' : ''}`}>
+      <div className={`app-content ${view === 'calendar' || view === 'kanban' ? 'no-scroll' : ''}`}>
       {view === 'list' ? (
         <>
           <MemoList
@@ -295,6 +302,13 @@ export default function App(): React.ReactElement {
           memos={memos}
           onEdit={handleEdit}
           onToggle={handleToggle}
+        />
+      ) : view === 'kanban' ? (
+        <KanbanView
+          memos={memos}
+          onEdit={handleEdit}
+          onToggle={handleToggle}
+          onPin={handlePin}
         />
       ) : (
         <div className="trash-view">
