@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('api', {
   addTag: (tag) => ipcRenderer.invoke('add-tag', tag),
   updateTag: (tag) => ipcRenderer.invoke('update-tag', tag),
   deleteTag: (id) => ipcRenderer.invoke('delete-tag', id),
+  exportData: () => ipcRenderer.invoke('export-data'),
+  importData: () => ipcRenderer.invoke('import-data'),
   onReminder: (callback) => {
     ipcRenderer.on('reminder-triggered', (_, data) => callback(data));
   },

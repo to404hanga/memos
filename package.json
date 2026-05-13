@@ -9,6 +9,7 @@
     "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && electron .\""
   },
   "dependencies": {
+    "adm-zip": "^0.5.17",
     "better-sqlite3": "^12.9.0",
     "electron-store": "^8.1.0",
     "marked": "^18.0.3",

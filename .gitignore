@@ -1,6 +1,28 @@
-node_modules
-dist
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+
+# 系统文件
 .DS_Store
+Thumbs.db
+
+# 日志
 *.log
 npm-debug.log*
-docs
+
+# 导出文件
+*.zip
+备忘录导出_*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.codebuddy/
+.trae/
+
+# 文档
+docs/

@@ -74,6 +74,8 @@ export interface ElectronAPI {
   addTag: (tag: { name: string; color?: string }) => Promise<Tag>;
   updateTag: (tag: Tag) => Promise<Tag>;
   deleteTag: (id: string) => Promise<boolean>;
+  exportData: () => Promise<{ success: boolean; path?: string; count?: number; error?: string }>;
+  importData: () => Promise<{ success: boolean; imported?: number; skipped?: number; tagsImported?: number; error?: string }>;
   onReminder: (callback: (data: ReminderData) => void) => void;
 }
 

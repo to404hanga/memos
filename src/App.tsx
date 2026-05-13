@@ -151,6 +151,26 @@ export default function App(): React.ReactElement {
     setShowForm(false);
   };
 
+  const handleExport = async () => {
+    const result = await window.api.exportData();
+    if (result.success) {
+      alert(`导出成功！共 ${result.count} 条备忘录\n保存至: ${result.path}`);
+    } else if (result.error) {
+      alert(`导出失败: ${result.error}`);
+    }
+  };
+
+  const handleImport = async () => {
+    const result = await window.api.importData();
+    if (result.success) {
+      alert(`导入完成！新增 ${result.imported} 条，跳过 ${result.skipped} 条重复`);
+      await loadMemos();
+      refreshTags();
+    } else if (result.error) {
+      alert(`导入失败: ${result.error}`);
+    }
+  };
+
   const filteredMemos = memos.filter((m) => {
     if (filter === 'active' && m.completed) return false;
     if (filter === 'completed' && !m.completed) return false;
@@ -217,6 +237,10 @@ export default function App(): React.ReactElement {
             </button>
           </div>
           <div className="header-right">
+            <div className="io-btns">
+              <button className="io-btn" onClick={handleExport} title="导出数据">📤</button>
+              <button className="io-btn" onClick={handleImport} title="导入数据">📥</button>
+            </div>
             <button className="add-btn" onClick={() => { setEditingMemo(null); setShowForm(true); }}>
               + 新建
             </button>

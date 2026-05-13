@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const initSqlJs = require('sql.js');
 const { v4: uuidv4 } = require('uuid');
+const AdmZip = require('adm-zip');
 
 // 必须在 ready 之前设置，否则 Dock 标签不生效
 app.name = '备忘录';
@@ -649,6 +650,151 @@ ipcMain.handle('delete-tag', (_, id) => {
   db.run('DELETE FROM tags WHERE id = ?', [id]);
   saveDb();
   return true;
+});
+
+// ===== 导入/导出 =====
+ipcMain.handle('export-data', async () => {
+  const dateSuffix = new Date().toISOString().slice(0, 10);
+  const folderName = `备忘录导出_${dateSuffix}`;
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: '导出备忘录',
+    defaultPath: `${folderName}.zip`,
+    filters: [{ name: 'ZIP 压缩包', extensions: ['zip'] }],
+  });
+  if (result.canceled || !result.filePath) return { success: false };
+
+  try {
+    const zip = new AdmZip();
+    const memos = getAllMemos();
+    const tags = [];
+    const tagStmt = db.prepare('SELECT * FROM tags ORDER BY name');
+    while (tagStmt.step()) tags.push(tagStmt.getAsObject());
+    tagStmt.free();
+
+    // 收集所有图片路径并重写为相对路径
+    const imagesDir = path.join(app.getPath('userData'), 'images');
+    const imageFiles = new Set();
+
+    const exportMemos = memos.map((m) => {
+      let content = m.content || '';
+      const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+      content = content.replace(imgRegex, (match, alt, imgPath) => {
+        if (imgPath.startsWith('http://') || imgPath.startsWith('https://')) return match;
+        const fileName = path.basename(imgPath);
+        const fullPath = imgPath.startsWith('/') ? imgPath : path.join(imagesDir, fileName);
+        if (fs.existsSync(fullPath)) {
+          imageFiles.add(fullPath);
+          return `![${alt}](images/${fileName})`;
+        }
+        return match;
+      });
+      return { ...m, content };
+    });
+
+    // 所有文件放在同名文件夹下
+    zip.addFile(`${folderName}/memos.json`, Buffer.from(JSON.stringify({ memos: exportMemos, tags }, null, 2), 'utf-8'));
+
+    imageFiles.forEach((imgPath) => {
+      const fileName = path.basename(imgPath);
+      zip.addLocalFile(imgPath, `${folderName}/images`, fileName);
+    });
+
+    zip.writeZip(result.filePath);
+    return { success: true, path: result.filePath, count: memos.length };
+  } catch (err) {
+    console.error('[导出] 失败:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('import-data', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '导入备忘录',
+    properties: ['openFile'],
+    filters: [{ name: 'ZIP 压缩包', extensions: ['zip'] }],
+  });
+  if (result.canceled || result.filePaths.length === 0) return { success: false };
+
+  try {
+    const zip = new AdmZip(result.filePaths[0]);
+    const entries = zip.getEntries();
+
+    // 自动检测根文件夹前缀（兼容有/无文件夹两种格式）
+    let prefix = '';
+    const jsonEntry = entries.find((e) => e.entryName.endsWith('memos.json'));
+    if (!jsonEntry) return { success: false, error: '无效的备忘录导出文件' };
+    prefix = jsonEntry.entryName.replace('memos.json', '');
+
+    const data = JSON.parse(jsonEntry.getData().toString('utf-8'));
+    if (!data.memos || !Array.isArray(data.memos)) return { success: false, error: '数据格式错误' };
+
+    // 解压图片
+    const imagesDir = path.join(app.getPath('userData'), 'images');
+    if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
+
+    const imagePrefix = `${prefix}images/`;
+    const imageEntries = entries.filter((e) => e.entryName.startsWith(imagePrefix) && !e.isDirectory);
+    imageEntries.forEach((entry) => {
+      const fileName = path.basename(entry.entryName);
+      const destPath = path.join(imagesDir, fileName);
+      if (!fs.existsSync(destPath)) {
+        fs.writeFileSync(destPath, entry.getData());
+      }
+    });
+
+    // 导入标签
+    let tagsImported = 0;
+    if (data.tags && Array.isArray(data.tags)) {
+      data.tags.forEach((tag) => {
+        try {
+          db.run('INSERT OR IGNORE INTO tags (id, name, color) VALUES (?, ?, ?)', [tag.id || uuidv4(), tag.name, tag.color || '#007aff']);
+          tagsImported++;
+        } catch (e) { /* 忽略重复 */ }
+      });
+    }
+
+    // 导入备忘录
+    let imported = 0;
+    let skipped = 0;
+    data.memos.forEach((m) => {
+      const existing = getMemoById(m.id);
+      if (existing) { skipped++; return; }
+
+      // 重写图片路径为本地绝对路径
+      let content = m.content || '';
+      const imgRegex = /!\[([^\]]*)\]\(images\/([^)]+)\)/g;
+      content = content.replace(imgRegex, (match, alt, fileName) => {
+        const localPath = path.join(imagesDir, fileName);
+        if (fs.existsSync(localPath)) {
+          return `![${alt}](${localPath})`;
+        }
+        return match;
+      });
+
+      const newMemo = {
+        id: m.id || uuidv4(),
+        title: m.title,
+        content: content,
+        reminderTime: m.reminderTime || null,
+        recurrence: m.recurrence || null,
+        reminders: m.reminders || [],
+        mutePeriods: m.mutePeriods || [],
+        completed: m.completed || false,
+        pinned: m.pinned || false,
+        tags: m.tags || [],
+        createdAt: m.createdAt || new Date().toISOString(),
+      };
+      insertMemo(newMemo);
+      scheduleReminder(newMemo);
+      imported++;
+    });
+
+    saveDb();
+    return { success: true, imported, skipped, tagsImported };
+  } catch (err) {
+    console.error('[导入] 失败:', err);
+    return { success: false, error: err.message };
+  }
 });
 
 // ===== 应用生命周期 =====

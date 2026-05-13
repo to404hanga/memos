@@ -190,6 +190,30 @@ input, textarea, button {
   margin-left: auto;
 }
 
+.io-btns {
+  display: flex;
+  gap: 2px;
+  background: var(--tag-bg);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.io-btn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-secondary);
+}
+
+.io-btn:hover {
+  background: var(--card-bg);
+  transform: scale(1.1);
+}
+
 .filter-tabs {
   display: flex;
   background: rgba(0, 0, 0, 0.05);
