@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import MemoForm from './components/MemoForm';
 import MemoList from './components/MemoList';
 import Timeline from './components/Timeline';
+import CalendarView from './components/CalendarView';
 import type { Memo, MemoFormData, ReminderData, Tag } from '../types/global';
 
 type FilterType = 'all' | 'active' | 'completed';
-type ViewType = 'list' | 'timeline' | 'trash';
+type ViewType = 'list' | 'timeline' | 'calendar' | 'trash';
 type ThemeMode = 'auto' | 'light' | 'dark';
 
 export default function App(): React.ReactElement {
@@ -196,6 +197,12 @@ export default function App(): React.ReactElement {
               时间轴
             </button>
             <button
+              className={`filter-btn ${view === 'calendar' ? 'active' : ''}`}
+              onClick={() => setView('calendar')}
+            >
+              日历
+            </button>
+            <button
               className={`filter-btn ${view === 'trash' ? 'active' : ''}`}
               onClick={() => { setView('trash'); loadTrash(); }}
             >
@@ -260,6 +267,7 @@ export default function App(): React.ReactElement {
         </div>
       )}
 
+      <div className={`app-content ${view === 'calendar' ? 'no-scroll' : ''}`}>
       {view === 'list' ? (
         <>
           <MemoList
@@ -281,6 +289,12 @@ export default function App(): React.ReactElement {
           memos={memos}
           onToggle={handleToggle}
           onEdit={handleEdit}
+        />
+      ) : view === 'calendar' ? (
+        <CalendarView
+          memos={memos}
+          onEdit={handleEdit}
+          onToggle={handleToggle}
         />
       ) : (
         <div className="trash-view">
@@ -323,6 +337,7 @@ export default function App(): React.ReactElement {
           )}
         </div>
       )}
+      </div>
 
       {reminder && (
         <div className="reminder-overlay" onClick={() => setReminder(null)}>
