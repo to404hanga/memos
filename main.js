@@ -78,6 +78,12 @@ async function initDatabase() {
     db.run("ALTER TABLE memos ADD COLUMN mute_periods TEXT DEFAULT '[]'");
   }
 
+  try {
+    db.run('SELECT attachments FROM memos LIMIT 1');
+  } catch (e) {
+    db.run("ALTER TABLE memos ADD COLUMN attachments TEXT DEFAULT '[]'");
+  }
+
   // 迁移旧数据：将单个 reminderTime/recurrence 转为 reminders 数组
   migrateOldReminders();
 
@@ -156,16 +162,16 @@ function getMemoById(id) {
 
 function insertMemo(memo) {
   db.run(
-    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, reminders, mute_periods, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), memo.createdAt]
+    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, reminders, mute_periods, attachments, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), JSON.stringify(memo.attachments || []), memo.createdAt]
   );
   saveDb();
 }
 
 function updateMemoInDb(memo) {
   db.run(
-    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ?, reminders = ?, mute_periods = ? WHERE id = ?',
-    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), memo.id]
+    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ?, reminders = ?, mute_periods = ?, attachments = ? WHERE id = ?',
+    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), JSON.stringify(memo.attachments || []), memo.id]
   );
   saveDb();
 }
@@ -189,6 +195,7 @@ function rowToMemo(row) {
     recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,
     reminders: row.reminders ? JSON.parse(row.reminders) : [],
     mutePeriods: row.mute_periods ? JSON.parse(row.mute_periods) : [],
+    attachments: row.attachments ? JSON.parse(row.attachments) : [],
     completed: row.completed === 1,
     pinned: row.pinned === 1,
     tags: row.tags ? JSON.parse(row.tags) : [],
@@ -530,6 +537,47 @@ ipcMain.handle('get-image-path', (_, fileName) => {
   return path.join(app.getPath('userData'), 'images', fileName);
 });
 
+ipcMain.handle('select-attachment', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [{ name: '所有文件', extensions: ['*'] }],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+
+  const srcPath = result.filePaths[0];
+  const originalName = path.basename(srcPath);
+  const ext = path.extname(srcPath);
+  const fileName = `${uuidv4()}${ext}`;
+  const stats = fs.statSync(srcPath);
+
+  const attachDir = path.join(app.getPath('userData'), 'attachments');
+  if (!fs.existsSync(attachDir)) fs.mkdirSync(attachDir, { recursive: true });
+
+  const destPath = path.join(attachDir, fileName);
+  fs.copyFileSync(srcPath, destPath);
+  return { fileName, originalName, size: stats.size, filePath: destPath };
+});
+
+ipcMain.handle('save-dropped-file', (_, srcPath) => {
+  if (!fs.existsSync(srcPath)) return null;
+  const originalName = path.basename(srcPath);
+  const ext = path.extname(srcPath);
+  const fileName = `${uuidv4()}${ext}`;
+  const stats = fs.statSync(srcPath);
+
+  const attachDir = path.join(app.getPath('userData'), 'attachments');
+  if (!fs.existsSync(attachDir)) fs.mkdirSync(attachDir, { recursive: true });
+
+  const destPath = path.join(attachDir, fileName);
+  fs.copyFileSync(srcPath, destPath);
+  return { fileName, originalName, size: stats.size, filePath: destPath };
+});
+
+ipcMain.handle('open-attachment', (_, filePath) => {
+  const { shell } = require('electron');
+  shell.openPath(filePath);
+});
+
 ipcMain.handle('add-memo', (_, memo) => {
   const newMemo = {
     id: uuidv4(),
@@ -539,6 +587,7 @@ ipcMain.handle('add-memo', (_, memo) => {
     recurrence: memo.recurrence || null,
     reminders: memo.reminders || [],
     mutePeriods: memo.mutePeriods || [],
+    attachments: memo.attachments || [],
     completed: false,
     tags: memo.tags || [],
     createdAt: new Date().toISOString(),
@@ -674,6 +723,7 @@ ipcMain.handle('export-data', async () => {
     // 收集所有图片路径并重写为相对路径
     const imagesDir = path.join(app.getPath('userData'), 'images');
     const imageFiles = new Set();
+    const attachmentFiles = new Set();
 
     const exportMemos = memos.map((m) => {
       let content = m.content || '';
@@ -688,7 +738,15 @@ ipcMain.handle('export-data', async () => {
         }
         return match;
       });
-      return { ...m, content };
+      // 附件路径重写为相对路径
+      const exportAttachments = (m.attachments || []).map((att) => {
+        if (att.filePath && fs.existsSync(att.filePath)) {
+          attachmentFiles.add(att.filePath);
+          return { ...att, filePath: `attachments/${att.fileName}` };
+        }
+        return att;
+      });
+      return { ...m, content, attachments: exportAttachments };
     });
 
     // 所有文件放在同名文件夹下
@@ -697,6 +755,11 @@ ipcMain.handle('export-data', async () => {
     imageFiles.forEach((imgPath) => {
       const fileName = path.basename(imgPath);
       zip.addLocalFile(imgPath, `${folderName}/images`, fileName);
+    });
+
+    attachmentFiles.forEach((attPath) => {
+      const fileName = path.basename(attPath);
+      zip.addLocalFile(attPath, `${folderName}/attachments`, fileName);
     });
 
     zip.writeZip(result.filePath);
@@ -742,6 +805,20 @@ ipcMain.handle('import-data', async () => {
       }
     });
 
+    // 解压附件
+    const attachDir = path.join(app.getPath('userData'), 'attachments');
+    if (!fs.existsSync(attachDir)) fs.mkdirSync(attachDir, { recursive: true });
+
+    const attachPrefix = `${prefix}attachments/`;
+    const attachEntries = entries.filter((e) => e.entryName.startsWith(attachPrefix) && !e.isDirectory);
+    attachEntries.forEach((entry) => {
+      const fileName = path.basename(entry.entryName);
+      const destPath = path.join(attachDir, fileName);
+      if (!fs.existsSync(destPath)) {
+        fs.writeFileSync(destPath, entry.getData());
+      }
+    });
+
     // 导入标签
     let tagsImported = 0;
     if (data.tags && Array.isArray(data.tags)) {
@@ -771,6 +848,15 @@ ipcMain.handle('import-data', async () => {
         return match;
       });
 
+      // 重写附件路径为本地绝对路径
+      const importAttachments = (m.attachments || []).map((att) => {
+        if (att.filePath && att.filePath.startsWith('attachments/')) {
+          const localPath = path.join(attachDir, att.fileName);
+          return { ...att, filePath: localPath };
+        }
+        return att;
+      });
+
       const newMemo = {
         id: m.id || uuidv4(),
         title: m.title,
@@ -779,6 +865,7 @@ ipcMain.handle('import-data', async () => {
         recurrence: m.recurrence || null,
         reminders: m.reminders || [],
         mutePeriods: m.mutePeriods || [],
+        attachments: importAttachments,
         completed: m.completed || false,
         pinned: m.pinned || false,
         tags: m.tags || [],

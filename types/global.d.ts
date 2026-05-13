@@ -12,6 +12,13 @@ export interface MutePeriod {
   to: string;   // ISO date string (YYYY-MM-DD)
 }
 
+export interface Attachment {
+  fileName: string;   // 存储的文件名（UUID）
+  originalName: string; // 原始文件名
+  size: number;       // 文件大小（字节）
+  filePath: string;   // 本地绝对路径
+}
+
 export interface Tag {
   id: string;
   name: string;
@@ -26,6 +33,7 @@ export interface Memo {
   recurrence: Recurrence | null;
   reminders: Recurrence[];
   mutePeriods: MutePeriod[];
+  attachments: Attachment[];
   completed: boolean;
   pinned: boolean;
   tags: string[];
@@ -41,6 +49,7 @@ export interface MemoFormData {
   recurrence?: Recurrence | null;
   reminders?: Recurrence[];
   mutePeriods?: MutePeriod[];
+  attachments?: Attachment[];
   tags?: string[];
 }
 
@@ -70,6 +79,9 @@ export interface ElectronAPI {
   selectImage: () => Promise<ImageResult | null>;
   saveDroppedImage: (filePath: string) => Promise<ImageResult | null>;
   getImagePath: (fileName: string) => Promise<string>;
+  selectAttachment: () => Promise<Attachment | null>;
+  saveDroppedFile: (filePath: string) => Promise<Attachment | null>;
+  openAttachment: (filePath: string) => Promise<void>;
   getTags: () => Promise<Tag[]>;
   addTag: (tag: { name: string; color?: string }) => Promise<Tag>;
   updateTag: (tag: Tag) => Promise<Tag>;

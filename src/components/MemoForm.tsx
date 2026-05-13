@@ -1,8 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MarkdownView from './MarkdownView';
-import type { Memo, MemoFormData, Recurrence, Tag, MutePeriod } from '../../types/global';
+import type { Memo, MemoFormData, Recurrence, Tag, MutePeriod, Attachment } from '../../types/global';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+function getFileIcon(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  const iconMap: Record<string, string> = {
+    pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊',
+    ppt: '📽️', pptx: '📽️', txt: '📃', md: '📃', csv: '📊',
+    zip: '📦', rar: '📦', '7z': '📦', tar: '📦', gz: '📦',
+    mp3: '🎵', wav: '🎵', flac: '🎵', mp4: '🎬', avi: '🎬', mov: '🎬',
+    js: '💻', ts: '💻', py: '💻', java: '💻', html: '🌐', css: '🎨',
+    json: '📋', xml: '📋', yaml: '📋', yml: '📋',
+  };
+  return iconMap[ext] || '📎';
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 type RecurrenceType = 'once' | 'daily' | 'workday' | 'weekly' | 'monthly';
 type EditorMode = 'split' | 'edit' | 'preview';
@@ -24,6 +43,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
 
   const [reminders, setReminders] = useState<Recurrence[]>([]);
   const [mutePeriods, setMutePeriods] = useState<MutePeriod[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -41,6 +61,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
       setSelectedTags(memo.tags || []);
       setReminders(memo.reminders && memo.reminders.length > 0 ? memo.reminders : []);
       setMutePeriods(memo.mutePeriods || []);
+      setAttachments(memo.attachments || []);
     }
   }, [memo]);
 
@@ -61,6 +82,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
       tags: selectedTags,
       reminders: reminders,
       mutePeriods: mutePeriods.filter((p) => p.from && p.to),
+      attachments: attachments,
     };
 
     if (memo) data.id = memo.id;
@@ -158,6 +180,9 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
     const imageFiles = files.filter((f) =>
       /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name)
     );
+    const otherFiles = files.filter((f) =>
+      !/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name)
+    );
 
     for (const file of imageFiles) {
       const filePath = (file as unknown as { path: string }).path;
@@ -168,7 +193,15 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
       }
     }
 
-    if (imageFiles.length > 0 && textareaRef.current) {
+    for (const file of otherFiles) {
+      const filePath = (file as unknown as { path: string }).path;
+      const result = await window.api.saveDroppedFile(filePath);
+      if (result) {
+        setAttachments((prev) => [...prev, result]);
+      }
+    }
+
+    if (files.length > 0 && textareaRef.current) {
       textareaRef.current.focus();
     }
   };
@@ -486,6 +519,34 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
           </div>
         </div>
       )}
+
+      <div className="form-group">
+        <div className="content-label-row">
+          <label>附件</label>
+          <button type="button" className="tag-add-btn" onClick={async () => {
+            const result = await window.api.selectAttachment();
+            if (result) setAttachments([...attachments, result]);
+          }}>+ 添加附件</button>
+        </div>
+        {attachments.length === 0 && (
+          <p className="no-reminders">暂无附件，可拖拽文件到编辑区或点击「+ 添加附件」</p>
+        )}
+        {attachments.length > 0 && (
+          <div className="attachments-list">
+            {attachments.map((att, idx) => (
+              <div key={idx} className="attachment-item">
+                <span className="attachment-icon">{getFileIcon(att.originalName)}</span>
+                <div className="attachment-info">
+                  <span className="attachment-name" title={att.originalName}>{att.originalName}</span>
+                  <span className="attachment-size">{formatFileSize(att.size)}</span>
+                </div>
+                <button type="button" className="attachment-open" onClick={() => window.api.openAttachment(att.filePath)} title="打开文件">📂</button>
+                <button type="button" className="rem-delete" onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))} title="移除">✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="form-actions">
         <button type="button" className="btn-cancel" onClick={onCancel}>
