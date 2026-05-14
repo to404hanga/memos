@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "description": "桌面备忘录提醒应用",
   "main": "main.js",
+  "bin": {
+    "memo": "./cli.js"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && electron .\""
@@ -11,6 +14,7 @@
   "dependencies": {
     "adm-zip": "^0.5.17",
     "better-sqlite3": "^12.9.0",
+    "commander": "^14.0.3",
     "electron-store": "^8.1.0",
     "marked": "^18.0.3",
     "node-cron": "^3.0.3",

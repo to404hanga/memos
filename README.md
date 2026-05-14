@@ -33,6 +33,7 @@
 - SQLite 本地数据库持久化存储
 - 导入/导出：ZIP 格式打包备忘录数据和图片，跨设备迁移
 - Webhook：提醒触发时自动推送到企微机器人（Markdown 格式，支持模板变量）
+- CLI 命令行：全部功能可通过 `memo` 命令操作，与 GUI 共享数据
 
 ## 运行
 
@@ -45,6 +46,32 @@ npx webpack build --mode production && npx electron .
 
 # 开发模式（热更新）
 npm run dev
+
+# 注册 CLI 全局命令
+npm link
+```
+
+## CLI 使用
+
+> 需要 GUI 应用已启动（CLI 通过本地 HTTP API 与 GUI 通信）
+
+```bash
+memo list                          # 列出待办
+memo list -a -v                    # 列出全部（含已完成），显示内容预览
+memo search 关键词                  # 搜索
+memo show <id>                     # 查看详情（id 可只写前几位）
+memo add "开会" -r "2026-05-15 10:00"  # 新建 + 提醒
+memo edit <id> -T "新标题"          # 编辑
+memo done <id>                     # 标记完成/未完成
+memo pin <id>                      # 置顶/取消
+memo delete <id>                   # 删除（移到回收站）
+memo trash                         # 查看回收站
+memo restore <id>                  # 恢复
+memo empty-trash                   # 清空回收站
+memo tag ls                        # 列出标签
+memo tag add 工作 -c "#ff9500"     # 添加标签
+memo export backup.json            # 导出到文件
+memo import backup.json            # 从文件导入
 ```
 
 ## 技术栈

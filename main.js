@@ -984,6 +984,152 @@ ipcMain.handle('import-data', async () => {
   }
 });
 
+// ===== 本地 HTTP API（供 CLI 调用） =====
+const CLI_PORT = 19527;
+
+function startCliServer() {
+  const http = require('http');
+
+  const routes = {
+    'GET /api/memos': () => getAllMemos(),
+    'GET /api/trash': () => getTrashMemos(),
+    'GET /api/tags': () => {
+      const stmt = db.prepare('SELECT * FROM tags ORDER BY name');
+      const rows = [];
+      while (stmt.step()) rows.push(stmt.getAsObject());
+      stmt.free();
+      return rows;
+    },
+    'POST /api/memos': (body) => {
+      const newMemo = {
+        id: uuidv4(),
+        title: body.title,
+        content: body.content || '',
+        reminderTime: body.reminderTime || null,
+        recurrence: body.recurrence || null,
+        reminders: body.reminders || [],
+        mutePeriods: body.mutePeriods || [],
+        attachments: body.attachments || [],
+        webhook: body.webhook || null,
+        completed: false,
+        tags: body.tags || [],
+        createdAt: new Date().toISOString(),
+      };
+      insertMemo(newMemo);
+      scheduleReminder(newMemo);
+      return newMemo;
+    },
+    'PUT /api/memos': (body) => {
+      const existing = getMemoById(body.id);
+      if (!existing) return { error: 'not found' };
+      const merged = { ...existing, ...body };
+      updateMemoInDb(merged);
+      scheduleReminder(merged);
+      return merged;
+    },
+    'DELETE /api/memos': (body) => {
+      db.run('UPDATE memos SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), body.id]);
+      saveDb();
+      clearMemoTimers(body.id);
+      return { success: true };
+    },
+    'POST /api/memos/complete': (body) => {
+      const memo = getMemoById(body.id);
+      if (!memo) return { error: 'not found' };
+      memo.completed = !memo.completed;
+      updateMemoInDb(memo);
+      if (memo.completed) clearMemoTimers(body.id);
+      else scheduleReminder(memo);
+      return memo;
+    },
+    'POST /api/memos/pin': (body) => {
+      const memo = getMemoById(body.id);
+      if (!memo) return { error: 'not found' };
+      memo.pinned = !memo.pinned;
+      updateMemoInDb(memo);
+      return memo;
+    },
+    'POST /api/memos/restore': (body) => {
+      db.run('UPDATE memos SET deleted_at = NULL WHERE id = ?', [body.id]);
+      saveDb();
+      const memo = getMemoById(body.id);
+      if (memo) scheduleReminder(memo);
+      return memo;
+    },
+    'DELETE /api/memos/permanent': (body) => {
+      db.run('DELETE FROM memos WHERE id = ?', [body.id]);
+      saveDb();
+      return { success: true };
+    },
+    'DELETE /api/trash': () => {
+      db.run('DELETE FROM memos WHERE deleted_at IS NOT NULL');
+      saveDb();
+      return { success: true };
+    },
+    'GET /api/search': (_, query) => {
+      const k = `%${query.q || ''}%`;
+      const stmt = db.prepare('SELECT * FROM memos WHERE deleted_at IS NULL AND (title LIKE ? OR content LIKE ?) ORDER BY pinned DESC, created_at DESC');
+      stmt.bind([k, k]);
+      const rows = [];
+      while (stmt.step()) rows.push(stmt.getAsObject());
+      stmt.free();
+      return rows.map(rowToMemo);
+    },
+    'POST /api/tags': (body) => {
+      const id = uuidv4();
+      db.run('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)', [id, body.name, body.color || '#007aff']);
+      saveDb();
+      return { id, name: body.name, color: body.color || '#007aff' };
+    },
+    'DELETE /api/tags': (body) => {
+      db.run('DELETE FROM tags WHERE id = ?', [body.id]);
+      saveDb();
+      return { success: true };
+    },
+  };
+
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, `http://localhost:${CLI_PORT}`);
+    const routeKey = `${req.method} ${url.pathname}`;
+
+    res.setHeader('Content-Type', 'application/json');
+
+    if (routeKey === 'GET /api/ping') {
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    const handler = routes[routeKey];
+    if (!handler) {
+      res.statusCode = 404;
+      res.end(JSON.stringify({ error: 'not found' }));
+      return;
+    }
+
+    if (req.method === 'GET') {
+      const query = Object.fromEntries(url.searchParams);
+      const result = handler(null, query);
+      res.end(JSON.stringify(result));
+    } else {
+      let data = '';
+      req.on('data', (chunk) => { data += chunk; });
+      req.on('end', () => {
+        let body = {};
+        try { body = JSON.parse(data); } catch (e) {}
+        const result = handler(body);
+        res.end(JSON.stringify(result));
+      });
+    }
+  });
+
+  server.listen(CLI_PORT, '127.0.0.1', () => {
+    console.log(`[CLI Server] 监听 http://127.0.0.1:${CLI_PORT}`);
+  });
+  server.on('error', (err) => {
+    console.error(`[CLI Server] 启动失败: ${err.message}`);
+  });
+}
+
 // ===== 应用生命周期 =====
 app.whenReady().then(async () => {
   // 设置 Dock 图标和应用名
@@ -998,6 +1144,7 @@ app.whenReady().then(async () => {
   createWindow();
   createTray();
   loadAllReminders();
+  startCliServer();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
