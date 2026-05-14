@@ -28,8 +28,7 @@ export interface Tag {
 export interface WebhookConfig {
   enabled: boolean;
   url: string;
-  headers?: string;
-  body?: string; // 自定义请求体模板，支持 {{title}} {{content}} {{tags}} {{time}} 变量
+  content: string; // 企微 markdown_v2 content 模板，支持 {{title}} {{content}} {{tags}} {{time}} 变量
 }
 
 export interface Memo {
@@ -97,7 +96,7 @@ export interface ElectronAPI {
   deleteTag: (id: string) => Promise<boolean>;
   exportData: () => Promise<{ success: boolean; path?: string; count?: number; error?: string }>;
   importData: () => Promise<{ success: boolean; imported?: number; skipped?: number; tagsImported?: number; error?: string }>;
-  testWebhook: (url: string, headers: string, body?: string, memo?: { title: string; content: string; tags: string[] }) => Promise<{ success: boolean; status?: number; body?: string; error?: string }>;
+  testWebhook: (url: string, content: string, memo: { title: string; content: string; tags: string[] }) => Promise<{ success: boolean; status?: number; body?: string; error?: string }>;
   onReminder: (callback: (data: ReminderData) => void) => void;
 }
 

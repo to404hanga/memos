@@ -1949,17 +1949,7 @@ input, textarea, button {
   color: var(--text-muted);
 }
 
-/* ===== 设置面板 ===== */
-.settings-modal {
-  max-width: 520px;
-}
-
-.setting-desc {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 2px;
-}
-
+/* ===== Webhook & 开关 ===== */
 .switch {
   position: relative;
   display: inline-block;

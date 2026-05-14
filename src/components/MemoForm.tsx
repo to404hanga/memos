@@ -44,7 +44,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
   const [reminders, setReminders] = useState<Recurrence[]>([]);
   const [mutePeriods, setMutePeriods] = useState<MutePeriod[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [webhook, setWebhook] = useState<WebhookConfig>({ enabled: false, url: '', headers: '' });
+  const [webhook, setWebhook] = useState<WebhookConfig>({ enabled: false, url: '', content: '' });
   const [webhookTestResult, setWebhookTestResult] = useState<string | null>(null);
 
   const [allTags, setAllTags] = useState<Tag[]>([]);
@@ -64,7 +64,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
       setReminders(memo.reminders && memo.reminders.length > 0 ? memo.reminders : []);
       setMutePeriods(memo.mutePeriods || []);
       setAttachments(memo.attachments || []);
-      setWebhook(memo.webhook || { enabled: false, url: '', headers: '' });
+      setWebhook(memo.webhook || { enabled: false, url: '', content: '' });
     }
   }, [memo]);
 
@@ -86,7 +86,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
       reminders: reminders,
       mutePeriods: mutePeriods.filter((p) => p.from && p.to),
       attachments: attachments,
-      webhook: webhook.enabled && webhook.url ? webhook : null,
+      webhook: webhook.enabled && webhook.url && webhook.content ? webhook : null,
     };
 
     if (memo) data.id = memo.id;
@@ -554,7 +554,7 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
 
       <div className="form-group">
         <div className="content-label-row">
-          <label>Webhook</label>
+          <label>企微 Webhook</label>
           <label className="switch">
             <input type="checkbox" checked={webhook.enabled} onChange={(e) => setWebhook({ ...webhook, enabled: e.target.checked })} />
             <span className="switch-slider" />
@@ -566,27 +566,22 @@ export default function MemoForm({ memo, onSubmit, onCancel }: MemoFormProps): R
               type="text"
               value={webhook.url}
               onChange={(e) => setWebhook({ ...webhook, url: e.target.value })}
-              placeholder="https://example.com/webhook"
-            />
-            <input
-              type="text"
-              value={webhook.headers || ''}
-              onChange={(e) => setWebhook({ ...webhook, headers: e.target.value })}
-              placeholder='自定义请求头 JSON（可选）'
+              placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
             />
             <textarea
               className="webhook-body-input"
-              value={webhook.body || ''}
-              onChange={(e) => setWebhook({ ...webhook, body: e.target.value })}
-              placeholder={'自定义请求体（可选），留空使用默认格式\n可用变量: {{title}} {{content}} {{tags}} {{time}} {{id}} {{type}}'}
+              value={webhook.content || ''}
+              onChange={(e) => setWebhook({ ...webhook, content: e.target.value })}
+              placeholder={'发送内容（Markdown 格式）\n可用变量: {{title}} {{content}} {{tags}} {{time}}'}
               rows={3}
             />
-            <p className="webhook-hint">示例（企微机器人）: {`{"msgtype":"text","text":{"content":"⏰ {{title}}\\n{{content}}"}}`}</p>
+            <p className="webhook-hint">示例: # ⏰ {'{{title}}'}\n{'{{content}}'}\n&gt; 标签: {'{{tags}}'}</p>
             <div className="webhook-test-row">
               <button type="button" className="webhook-test-btn" onClick={async () => {
                 if (!webhook.url) { setWebhookTestResult('❌ 请先填写 URL'); return; }
+                if (!webhook.content) { setWebhookTestResult('❌ 请填写发送内容'); return; }
                 setWebhookTestResult('⏳ 发送中...');
-                const r = await window.api.testWebhook(webhook.url, webhook.headers || '{}', webhook.body || '', { title, content, tags: selectedTags });
+                const r = await window.api.testWebhook(webhook.url, webhook.content, { title, content, tags: selectedTags });
                 setWebhookTestResult(r.success ? `✅ 成功 (HTTP ${r.status})` : `❌ ${r.error}`);
               }}>发送测试</button>
               {webhookTestResult && <span className="webhook-test-result">{webhookTestResult}</span>}
