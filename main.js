@@ -47,6 +47,13 @@ async function initDatabase() {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
   // 兼容旧数据库：如果 memos 表没有 tags 列则添加
   try {
     db.run('SELECT tags FROM memos LIMIT 1');
@@ -82,6 +89,12 @@ async function initDatabase() {
     db.run('SELECT attachments FROM memos LIMIT 1');
   } catch (e) {
     db.run("ALTER TABLE memos ADD COLUMN attachments TEXT DEFAULT '[]'");
+  }
+
+  try {
+    db.run('SELECT webhook FROM memos LIMIT 1');
+  } catch (e) {
+    db.run("ALTER TABLE memos ADD COLUMN webhook TEXT DEFAULT NULL");
   }
 
   // 迁移旧数据：将单个 reminderTime/recurrence 转为 reminders 数组
@@ -162,16 +175,16 @@ function getMemoById(id) {
 
 function insertMemo(memo) {
   db.run(
-    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, reminders, mute_periods, attachments, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), JSON.stringify(memo.attachments || []), memo.createdAt]
+    'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, reminders, mute_periods, attachments, webhook, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), JSON.stringify(memo.attachments || []), memo.webhook ? JSON.stringify(memo.webhook) : null, memo.createdAt]
   );
   saveDb();
 }
 
 function updateMemoInDb(memo) {
   db.run(
-    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ?, reminders = ?, mute_periods = ?, attachments = ? WHERE id = ?',
-    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), JSON.stringify(memo.attachments || []), memo.id]
+    'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ?, reminders = ?, mute_periods = ?, attachments = ?, webhook = ? WHERE id = ?',
+    [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), JSON.stringify(memo.attachments || []), memo.webhook ? JSON.stringify(memo.webhook) : null, memo.id]
   );
   saveDb();
 }
@@ -196,6 +209,7 @@ function rowToMemo(row) {
     reminders: row.reminders ? JSON.parse(row.reminders) : [],
     mutePeriods: row.mute_periods ? JSON.parse(row.mute_periods) : [],
     attachments: row.attachments ? JSON.parse(row.attachments) : [],
+    webhook: row.webhook ? JSON.parse(row.webhook) : null,
     completed: row.completed === 1,
     pinned: row.pinned === 1,
     tags: row.tags ? JSON.parse(row.tags) : [],
@@ -458,6 +472,9 @@ function scheduleReminder(memo) {
         });
       }
 
+      // 发送 Webhook
+      sendWebhook(memo, rem.type).catch(() => {});
+
       // 周期性提醒自动调度下一次
       if (rem.type !== 'once') {
         const freshMemo = getMemoById(memo.id);
@@ -483,6 +500,105 @@ function scheduleReminder(memo) {
 function loadAllReminders() {
   const memos = getAllMemos();
   memos.forEach((memo) => scheduleReminder(memo));
+}
+
+// ===== 设置读写 =====
+function getSetting(key, defaultValue = '') {
+  const stmt = db.prepare('SELECT value FROM settings WHERE key = ?');
+  stmt.bind([key]);
+  if (stmt.step()) {
+    const val = stmt.getAsObject().value;
+    stmt.free();
+    return val;
+  }
+  stmt.free();
+  return defaultValue;
+}
+
+function setSetting(key, value) {
+  db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
+  saveDb();
+}
+
+function getWebhookConfig() {
+  return {
+    enabled: getSetting('webhook_enabled', 'false') === 'true',
+    url: getSetting('webhook_url', ''),
+    headers: getSetting('webhook_headers', '{}'),
+  };
+}
+
+// ===== Webhook =====
+async function sendWebhook(memo, reminderType) {
+  const config = memo.webhook;
+  if (!config || !config.enabled || !config.url) return;
+
+  const now = new Date().toISOString();
+  let payload;
+
+  if (config.body && config.body.trim()) {
+    // 使用自定义模板
+    payload = config.body
+      .replace(/\{\{title\}\}/g, memo.title || '')
+      .replace(/\{\{content\}\}/g, memo.content || '')
+      .replace(/\{\{tags\}\}/g, (memo.tags || []).join(', '))
+      .replace(/\{\{time\}\}/g, now)
+      .replace(/\{\{id\}\}/g, memo.id || '')
+      .replace(/\{\{type\}\}/g, reminderType || 'once');
+  } else {
+    // 默认格式
+    payload = JSON.stringify({
+      event: 'reminder',
+      memo: {
+        id: memo.id,
+        title: memo.title,
+        content: memo.content || '',
+        tags: memo.tags || [],
+        reminderTime: now,
+        reminderType: reminderType || 'once',
+      },
+      timestamp: now,
+    });
+  }
+
+  let customHeaders = {};
+  try { customHeaders = JSON.parse(config.headers || '{}'); } catch (e) { /* ignore */ }
+
+  const urlObj = new URL(config.url);
+  const isHttps = urlObj.protocol === 'https:';
+  const httpModule = isHttps ? require('https') : require('http');
+
+  const options = {
+    hostname: urlObj.hostname,
+    port: urlObj.port || (isHttps ? 443 : 80),
+    path: urlObj.pathname + urlObj.search,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload),
+      ...customHeaders,
+    },
+    timeout: 5000,
+  };
+
+  return new Promise((resolve) => {
+    const req = httpModule.request(options, (res) => {
+      console.log(`[Webhook] 发送成功: ${res.statusCode} - "${memo.title}"`);
+      res.resume();
+      resolve(true);
+    });
+    req.on('error', (err) => {
+      console.error(`[Webhook] 发送失败: ${err.message} - "${memo.title}"`);
+      resolve(false);
+    });
+    req.on('timeout', () => {
+      console.error(`[Webhook] 超时 - "${memo.title}"`);
+      req.destroy();
+      resolve(false);
+    });
+    req.write(payload);
+    req.end();
+  });
 }
 
 // ===== IPC 通信 =====
@@ -588,6 +704,7 @@ ipcMain.handle('add-memo', (_, memo) => {
     reminders: memo.reminders || [],
     mutePeriods: memo.mutePeriods || [],
     attachments: memo.attachments || [],
+    webhook: memo.webhook || null,
     completed: false,
     tags: memo.tags || [],
     createdAt: new Date().toISOString(),
@@ -699,6 +816,77 @@ ipcMain.handle('delete-tag', (_, id) => {
   db.run('DELETE FROM tags WHERE id = ?', [id]);
   saveDb();
   return true;
+});
+
+// ===== Webhook 测试 =====
+ipcMain.handle('test-webhook', async (_, url, headers, body, memoData) => {
+  const now = new Date().toISOString();
+  const mTitle = (memoData && memoData.title) || '测试提醒';
+  const mContent = (memoData && memoData.content) || '';
+  const mTags = (memoData && memoData.tags) || [];
+  let payload;
+
+  if (body && body.trim()) {
+    payload = body
+      .replace(/\{\{title\}\}/g, mTitle)
+      .replace(/\{\{content\}\}/g, mContent)
+      .replace(/\{\{tags\}\}/g, mTags.join(', '))
+      .replace(/\{\{time\}\}/g, now)
+      .replace(/\{\{id\}\}/g, 'test-001')
+      .replace(/\{\{type\}\}/g, 'once');
+  } else {
+    payload = JSON.stringify({
+      event: 'test',
+      memo: {
+        id: 'test-001',
+        title: mTitle,
+        content: mContent,
+        tags: mTags,
+        reminderTime: now,
+        reminderType: 'once',
+      },
+      timestamp: now,
+    });
+  }
+
+  let customHeaders = {};
+  try { customHeaders = JSON.parse(headers || '{}'); } catch (e) { /* ignore */ }
+
+  const urlObj = new URL(url);
+  const isHttps = urlObj.protocol === 'https:';
+  const httpModule = isHttps ? require('https') : require('http');
+
+  const options = {
+    hostname: urlObj.hostname,
+    port: urlObj.port || (isHttps ? 443 : 80),
+    path: urlObj.pathname + urlObj.search,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload),
+      ...customHeaders,
+    },
+    timeout: 5000,
+  };
+
+  return new Promise((resolve) => {
+    const req = httpModule.request(options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        resolve({ success: true, status: res.statusCode, body: body.substring(0, 200) });
+      });
+    });
+    req.on('error', (err) => {
+      resolve({ success: false, error: err.message });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ success: false, error: '请求超时（5s）' });
+    });
+    req.write(payload);
+    req.end();
+  });
 });
 
 // ===== 导入/导出 =====

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('api', {
   deleteTag: (id) => ipcRenderer.invoke('delete-tag', id),
   exportData: () => ipcRenderer.invoke('export-data'),
   importData: () => ipcRenderer.invoke('import-data'),
+  testWebhook: (url, headers, body, memo) => ipcRenderer.invoke('test-webhook', url, headers, body, memo),
   onReminder: (callback) => {
     ipcRenderer.on('reminder-triggered', (_, data) => callback(data));
   },

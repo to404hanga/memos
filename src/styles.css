@@ -1949,6 +1949,138 @@ input, textarea, button {
   color: var(--text-muted);
 }
 
+/* ===== 设置面板 ===== */
+.settings-modal {
+  max-width: 520px;
+}
+
+.setting-desc {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-tertiary);
+  border-radius: 24px;
+  border: 1.5px solid var(--border-input);
+  transition: all 0.2s;
+}
+
+.switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #fff;
+  border-radius: 50%;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.switch input:checked + .switch-slider {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.switch input:checked + .switch-slider::before {
+  left: 20px;
+}
+
+.webhook-test-btn {
+  background: var(--accent-bg);
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.webhook-test-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.webhook-test-result {
+  font-size: 13px;
+  margin-left: 12px;
+  color: var(--text-secondary);
+}
+
+.webhook-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.webhook-fields input[type='text'] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border-input);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.webhook-fields input[type='text']:focus {
+  border-color: var(--accent);
+}
+
+.webhook-body-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border-input);
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  outline: none;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.webhook-body-input:focus {
+  border-color: var(--accent);
+}
+
+.webhook-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  word-break: break-all;
+}
+
+.webhook-test-row {
+  display: flex;
+  align-items: center;
+}
+
 /* ===== 看板视图 ===== */
 .kanban-view {
   display: flex;

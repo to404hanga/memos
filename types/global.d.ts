@@ -25,6 +25,13 @@ export interface Tag {
   color: string;
 }
 
+export interface WebhookConfig {
+  enabled: boolean;
+  url: string;
+  headers?: string;
+  body?: string; // 自定义请求体模板，支持 {{title}} {{content}} {{tags}} {{time}} 变量
+}
+
 export interface Memo {
   id: string;
   title: string;
@@ -34,6 +41,7 @@ export interface Memo {
   reminders: Recurrence[];
   mutePeriods: MutePeriod[];
   attachments: Attachment[];
+  webhook: WebhookConfig | null;
   completed: boolean;
   pinned: boolean;
   tags: string[];
@@ -50,6 +58,7 @@ export interface MemoFormData {
   reminders?: Recurrence[];
   mutePeriods?: MutePeriod[];
   attachments?: Attachment[];
+  webhook?: WebhookConfig | null;
   tags?: string[];
 }
 
@@ -88,6 +97,7 @@ export interface ElectronAPI {
   deleteTag: (id: string) => Promise<boolean>;
   exportData: () => Promise<{ success: boolean; path?: string; count?: number; error?: string }>;
   importData: () => Promise<{ success: boolean; imported?: number; skipped?: number; tagsImported?: number; error?: string }>;
+  testWebhook: (url: string, headers: string, body?: string, memo?: { title: string; content: string; tags: string[] }) => Promise<{ success: boolean; status?: number; body?: string; error?: string }>;
   onReminder: (callback: (data: ReminderData) => void) => void;
 }
 
