@@ -1191,11 +1191,36 @@ function buildSystemPrompt() {
   while (tagStmt.step()) tagNames.push(tagStmt.getAsObject().name);
   tagStmt.free();
 
+  // 读取自定义模板
+  let customTemplate = '';
+  try {
+    const ps = db.prepare("SELECT value FROM settings WHERE key = 'ai_prompt_template'");
+    if (ps.step()) customTemplate = ps.getAsObject().value || '';
+    ps.free();
+  } catch (e) {}
+
+  // 动态变量替换
+  const vars = {
+    '{{NOW}}': now.toLocaleString('zh-CN', { hour12: false }),
+    '{{NOW_ISO}}': now.toISOString(),
+    '{{TIMEZONE}}': tz,
+    '{{TAGS}}': tagNames.length ? tagNames.join('、') : '（暂无）',
+  };
+
+  if (customTemplate.trim()) {
+    let result = customTemplate;
+    for (const [k, v] of Object.entries(vars)) {
+      result = result.replace(new RegExp(k.replace(/[{}]/g, '\\$&'), 'g'), v);
+    }
+    return result;
+  }
+
+  // 默认模板
   return [
     '你是一个智能备忘录助手，帮助用户管理待办事项。',
-    `当前时间：${now.toLocaleString('zh-CN', { hour12: false })}（ISO: ${now.toISOString()}）`,
+    `当前时间：${vars['{{NOW}}']}（ISO: ${vars['{{NOW_ISO}}']}）`,
     `用户时区：${tz}`,
-    `用户已有标签：${tagNames.length ? tagNames.join('、') : '（暂无）'}`,
+    `用户已有标签：${vars['{{TAGS}}']}`,
     '',
     '可用工具：',
     '- create_memo：创建新待办，仅生成预览卡片，需用户点击「✓ 创建」才落库',
@@ -1212,16 +1237,16 @@ function buildSystemPrompt() {
     '5. 用户说"把xx改成… / 给xx加个标签 / 修改xx的提醒时间"，直接调用 update_memo（不需要先 list_memos 确认）',
     '6. 如果 complete_memo / delete_memo / update_memo 返回 ambiguous（多条匹配），将候选列表展示给用户，询问具体是哪一条',
     '7. 如果 complete_memo / delete_memo / update_memo 返回 error（未找到），告知用户并建议检查标题关键词',
-    '6. 时间表达需转为具体时间（基于上方"当前时间"）：',
+    '8. 时间表达需转为具体时间（基于上方"当前时间"）：',
     '   - "明天下午3点" → 当前日期+1，15:00',
     '   - "下周一上午9点" → 计算下周一的日期',
     '   - "每天早上 8 点" → recurrence: { type: daily, hour: 8, minute: 0 }',
-    '7. 缺关键信息时主动询问（如只说"提醒我"没有时间）',
-    '8. 如果用户提到的标签不在已有列表，可以建议新建',
-    '9. 调用 create_memo 仅生成"预览卡片"，不会直接写入数据库——必须由用户点击「✓ 创建」按钮才会真正落库。所以你可以放心调用工具，无需反复确认。',
-    '10. 用户表达修改意图（如"再加个标签"）时，重新调用 create_memo 输出新版本预览',
-    '11. 调用 list_memos 后，根据返回结果用自然语言总结给用户（如分组、按时间排序、突出重要项）',
-    '12. 回复使用中文，简洁友好',
+    '9. 缺关键信息时主动询问（如只说"提醒我"没有时间）',
+    '10. 如果用户提到的标签不在已有列表，可以建议新建',
+    '11. 调用 create_memo 仅生成"预览卡片"，不会直接写入数据库——必须由用户点击「✓ 创建」按钮才会真正落库。所以你可以放心调用工具，无需反复确认。',
+    '12. 用户表达修改意图（如"再加个标签"）时，重新调用 create_memo 输出新版本预览',
+    '13. 调用 list_memos 后，根据返回结果用自然语言总结给用户（如分组、按时间排序、突出重要项）',
+    '14. 回复使用中文，简洁友好',
   ].join('\n');
 }
 
@@ -2098,6 +2123,43 @@ ipcMain.handle('ai-test-model', async (_, providerInput, modelName, thinking) =>
   } catch (err) {
     return { success: false, error: err.message || String(err) };
   }
+});
+
+// 获取 Ollama 本地已拉取的模型列表
+ipcMain.handle('ai-ollama-models', async (_, baseUrl) => {
+  try {
+    const url = (baseUrl || 'http://127.0.0.1:11434').replace(/\/+$/, '') + '/api/tags';
+    const { data } = await httpJson({ url, method: 'GET', timeoutMs: 5000 });
+    const models = (data.models || []).map((m) => m.name || m.model).filter(Boolean);
+    return { success: true, models };
+  } catch (err) {
+    return { success: false, error: err.message || String(err), models: [] };
+  }
+});
+
+// 获取/设置自定义 system prompt
+ipcMain.handle('ai-get-prompt-template', () => {
+  const stmt = db.prepare("SELECT value FROM settings WHERE key = 'ai_prompt_template'");
+  if (stmt.step()) {
+    const val = stmt.getAsObject().value;
+    stmt.free();
+    return val || '';
+  }
+  stmt.free();
+  return '';
+});
+
+ipcMain.handle('ai-set-prompt-template', (_, template) => {
+  const exists = db.prepare("SELECT key FROM settings WHERE key = 'ai_prompt_template'");
+  const found = exists.step();
+  exists.free();
+  if (found) {
+    db.run("UPDATE settings SET value = ? WHERE key = 'ai_prompt_template'", [template || '']);
+  } else {
+    db.run("INSERT INTO settings (key, value) VALUES ('ai_prompt_template', ?)", [template || '']);
+  }
+  saveDb();
+  return true;
 });
 
 // 流式 AI Chat IPC

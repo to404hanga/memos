@@ -2542,6 +2542,71 @@ input, textarea, button {
   flex-shrink: 0;
 }
 
+/* ----- Prompt 模板编辑 ----- */
+.ai-prompt-section {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+}
+
+.ai-prompt-toggle {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-prompt-toggle:hover {
+  color: var(--text-primary);
+}
+
+.ai-prompt-editor {
+  margin-top: 10px;
+}
+
+.ai-prompt-editor textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 120px;
+}
+
+.ai-prompt-editor textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ai-prompt-editor .hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.ai-prompt-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ai-prompt-actions .btn-submit {
+  width: auto;
+  padding: 6px 16px;
+  font-size: 12px;
+}
+
 /* ----- 对话历史面板 ----- */
 .ai-history-panel {
   border-bottom: 1px solid var(--border);

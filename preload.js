@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('api', {
   aiToggleModel: (id, enabled) => ipcRenderer.invoke('ai-toggle-model', id, enabled),
   aiReorderModels: (sortedIds) => ipcRenderer.invoke('ai-reorder-models', sortedIds),
   aiTestModel: (provider, modelName, thinking) => ipcRenderer.invoke('ai-test-model', provider, modelName, thinking),
+  aiOllamaModels: (baseUrl) => ipcRenderer.invoke('ai-ollama-models', baseUrl),
+  aiGetPromptTemplate: () => ipcRenderer.invoke('ai-get-prompt-template'),
+  aiSetPromptTemplate: (template) => ipcRenderer.invoke('ai-set-prompt-template', template),
   aiHasUsableModel: () => ipcRenderer.invoke('ai-has-usable-model'),
   // AI Chat
   aiChat: (args) => ipcRenderer.invoke('ai-chat', args),

@@ -211,6 +211,9 @@ export interface ElectronAPI {
   aiToggleModel: (id: string, enabled: boolean) => Promise<boolean>;
   aiReorderModels: (sortedIds: string[]) => Promise<boolean>;
   aiTestModel: (provider: AiProviderInput, modelName: string, thinking: boolean) => Promise<AiTestResult>;
+  aiOllamaModels: (baseUrl: string) => Promise<{ success: boolean; models: string[]; error?: string }>;
+  aiGetPromptTemplate: () => Promise<string>;
+  aiSetPromptTemplate: (template: string) => Promise<boolean>;
   aiHasUsableModel: () => Promise<boolean>;
   // AI Chat
   aiChat: (args: AiChatArgs | AiMessage[]) => Promise<AiChatResult>;

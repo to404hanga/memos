@@ -42,6 +42,11 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, AiTestResult>>({});
   const [dragId, setDragId] = useState<string | null>(null);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [ollamaLoading, setOllamaLoading] = useState(false);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
+  const [promptTemplate, setPromptTemplate] = useState('');
+  const [promptSaved, setPromptSaved] = useState(false);
 
   const reload = async () => {
     const [ps, ms] = await Promise.all([window.api.aiGetProviders(), window.api.aiGetModels()]);
@@ -53,7 +58,7 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
     }
   };
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { reload(); window.api.aiGetPromptTemplate().then(setPromptTemplate); }, []);
 
   // Provider 操作
   const handleAddProvider = () => setEditingProvider(emptyProviderDraft());
@@ -166,6 +171,33 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
     await reload();
   };
 
+  const fetchOllamaModels = async () => {
+    if (!selectedProvider || selectedProvider.type !== 'ollama') return;
+    setOllamaLoading(true);
+    const res = await window.api.aiOllamaModels(selectedProvider.baseUrl);
+    setOllamaModels(res.models || []);
+    setOllamaLoading(false);
+    if (!res.success) alert(`获取 Ollama 模型失败: ${res.error}`);
+  };
+
+  const handleAddOllamaModel = async (name: string) => {
+    if (!selectedProvider) return;
+    if (providerModels.find((m) => m.name === name)) return;
+    await window.api.aiSaveModel({
+      providerId: selectedProvider.id,
+      name,
+      enabled: true,
+      thinking: false,
+    });
+    await reload();
+  };
+
+  const handleSavePrompt = async () => {
+    await window.api.aiSetPromptTemplate(promptTemplate);
+    setPromptSaved(true);
+    setTimeout(() => setPromptSaved(false), 2000);
+  };
+
   // 拖拽排序（全局，跨 Provider）
   const sortedAllModels = [...models].sort((a, b) => a.priority - b.priority);
 
@@ -256,16 +288,51 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
               <>
                 <div className="ai-pane-header">
                   <span>「{selectedProvider.name}」的模型</span>
-                  <button
-                    className="ai-pane-add"
-                    onClick={() => {
-                      if (showAddModel) resetAddModelForm();
-                      else { setEditingModelId(null); setNewModelName(''); setNewModelAlias(''); setNewModelThinking(false); setShowAddModel(true); }
-                    }}
-                  >
-                    {showAddModel ? '✕ 取消' : '+ 添加模型'}
-                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {selectedProvider.type === 'ollama' && (
+                      <button
+                        className="ai-pane-add"
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                        onClick={fetchOllamaModels}
+                        disabled={ollamaLoading}
+                      >
+                        {ollamaLoading ? '获取中…' : '🔄 从 Ollama 获取'}
+                      </button>
+                    )}
+                    <button
+                      className="ai-pane-add"
+                      onClick={() => {
+                        if (showAddModel) resetAddModelForm();
+                        else { setEditingModelId(null); setNewModelName(''); setNewModelAlias(''); setNewModelThinking(false); setShowAddModel(true); }
+                      }}
+                    >
+                      {showAddModel ? '✕ 取消' : '+ 添加模型'}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Ollama 获取到的模型列表 */}
+                {ollamaModels.length > 0 && selectedProvider.type === 'ollama' && (
+                  <div className="ai-add-model-panel" style={{ paddingBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>Ollama 本地模型（点击添加）：</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {ollamaModels.map((mn) => {
+                        const exists = providerModels.find((m) => m.name === mn);
+                        return (
+                          <button
+                            key={mn}
+                            className={`ai-preset-chip ${exists ? 'exists' : ''}`}
+                            disabled={!!exists}
+                            onClick={() => handleAddOllamaModel(mn)}
+                            style={{ border: '1px solid var(--border)', background: 'var(--card-bg)', color: 'var(--text-primary)', padding: '4px 10px', borderRadius: 16, fontSize: 12, cursor: exists ? 'not-allowed' : 'pointer', opacity: exists ? 0.45 : 1, fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}
+                          >
+                            {mn} {exists && '✓'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {showAddModel && (
                   <div className="ai-add-model-panel">
@@ -419,6 +486,37 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
               </div>
             )}
           </div>
+        </div>
+
+        {/* Prompt 模板编辑 */}
+        <div className="ai-prompt-section">
+          <button
+            className="ai-prompt-toggle"
+            onClick={() => setShowPromptEditor((v) => !v)}
+          >
+            📝 自定义系统提示词 {showPromptEditor ? '▾' : '▸'}
+          </button>
+          {showPromptEditor && (
+            <div className="ai-prompt-editor">
+              <p className="hint">
+                留空使用默认模板。可用变量：{'{{NOW}}'} {'{{NOW_ISO}}'} {'{{TIMEZONE}}'} {'{{TAGS}}'}
+              </p>
+              <textarea
+                value={promptTemplate}
+                onChange={(e) => { setPromptTemplate(e.target.value); setPromptSaved(false); }}
+                placeholder="留空使用默认系统提示词..."
+                rows={8}
+              />
+              <div className="ai-prompt-actions">
+                <button className="btn-submit" onClick={handleSavePrompt}>
+                  {promptSaved ? '✓ 已保存' : '保存'}
+                </button>
+                {promptTemplate && (
+                  <button className="btn-cancel" onClick={() => { setPromptTemplate(''); handleSavePrompt(); }}>恢复默认</button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Provider 编辑弹窗 */}
