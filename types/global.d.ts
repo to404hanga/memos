@@ -72,6 +72,98 @@ export interface ImageResult {
   filePath: string;
 }
 
+// ===== AI 助手 =====
+export type AiProviderType = 'openai' | 'anthropic' | 'ollama';
+
+export interface AiProvider {
+  id: string;
+  name: string;
+  type: AiProviderType;
+  baseUrl: string;
+  apiKey: string;
+  createdAt: string;
+}
+
+export type AiProviderInput = Omit<AiProvider, 'id' | 'createdAt'> & {
+  id?: string;
+};
+
+export interface AiModel {
+  id: string;
+  providerId: string;
+  name: string;          // API 模型名，如 deepseek-chat
+  displayName?: string;  // 用户自定义别名
+  enabled: boolean;
+  thinking: boolean;
+  priority: number;      // 全局优先级，越小越优先
+  lastError?: string;
+  lastUsedAt?: string;
+  createdAt: string;
+}
+
+export type AiModelInput = Omit<AiModel, 'id' | 'createdAt' | 'priority' | 'lastError' | 'lastUsedAt'> & {
+  id?: string;
+};
+
+export interface AiToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, any>;
+}
+
+export interface AiCreateMemoArgs {
+  title: string;
+  content?: string;
+  tags?: string[];
+  reminderTime?: string;
+  recurrence?: Recurrence;
+}
+
+export interface AiMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  toolCalls?: AiToolCall[];
+  thinking?: string;
+  providerName?: string;
+  modelName?: string;
+  modelLabel?: string;     // "ProviderName/ModelName"
+  fallbackFrom?: string;   // 主模型 label（若降级才有值）
+  ts: string;
+}
+
+export interface AiChatArgs {
+  messages: AiMessage[];
+  modelId?: string;
+  streamId?: string;
+}
+
+export interface AiStreamChunk {
+  streamId: string;
+  type: 'thinking_delta' | 'content_delta' | 'server_tool' | 'server_tool_done' | 'model_start' | 'model_failed' | 'done' | 'error';
+  text?: string;
+  name?: string;
+  arguments?: Record<string, any>;
+  summary?: string;
+  providerName?: string;
+  modelLabel?: string;
+  fallbackFrom?: string;
+  error?: string;
+  message?: AiMessage;
+  loop?: number;
+}
+
+export interface AiChatResult {
+  message: AiMessage;
+  error?: string;
+}
+
+export interface AiTestResult {
+  success: boolean;
+  latencyMs?: number;
+  modelEcho?: string;
+  error?: string;
+}
+
 export interface ElectronAPI {
   getMemos: () => Promise<Memo[]>;
   searchMemos: (keyword: string) => Promise<Memo[]>;
@@ -97,6 +189,22 @@ export interface ElectronAPI {
   exportData: () => Promise<{ success: boolean; path?: string; count?: number; error?: string }>;
   importData: () => Promise<{ success: boolean; imported?: number; skipped?: number; tagsImported?: number; error?: string }>;
   testWebhook: (url: string, content: string, memo: { title: string; content: string; tags: string[] }) => Promise<{ success: boolean; status?: number; body?: string; error?: string }>;
+  // AI Providers
+  aiGetProviders: () => Promise<AiProvider[]>;
+  aiSaveProvider: (provider: AiProviderInput) => Promise<AiProvider>;
+  aiDeleteProvider: (id: string) => Promise<boolean>;
+  // AI Models
+  aiGetModels: () => Promise<AiModel[]>;
+  aiSaveModel: (model: AiModelInput) => Promise<AiModel>;
+  aiDeleteModel: (id: string) => Promise<boolean>;
+  aiToggleModel: (id: string, enabled: boolean) => Promise<boolean>;
+  aiReorderModels: (sortedIds: string[]) => Promise<boolean>;
+  aiTestModel: (provider: AiProviderInput, modelName: string, thinking: boolean) => Promise<AiTestResult>;
+  aiHasUsableModel: () => Promise<boolean>;
+  // AI Chat
+  aiChat: (args: AiChatArgs | AiMessage[]) => Promise<AiChatResult>;
+  aiChatStream: (args: AiChatArgs, onChunk: (chunk: AiStreamChunk) => void) => string;
+  aiChatStreamOff: (streamId: string) => void;
   onReminder: (callback: (data: ReminderData) => void) => void;
 }
 

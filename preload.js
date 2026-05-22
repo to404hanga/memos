@@ -25,6 +25,37 @@ contextBridge.exposeInMainWorld('api', {
   exportData: () => ipcRenderer.invoke('export-data'),
   importData: () => ipcRenderer.invoke('import-data'),
   testWebhook: (url, content, memo) => ipcRenderer.invoke('test-webhook', url, content, memo),
+  // AI Providers
+  aiGetProviders: () => ipcRenderer.invoke('ai-get-providers'),
+  aiSaveProvider: (provider) => ipcRenderer.invoke('ai-save-provider', provider),
+  aiDeleteProvider: (id) => ipcRenderer.invoke('ai-delete-provider', id),
+  // AI Models
+  aiGetModels: () => ipcRenderer.invoke('ai-get-models'),
+  aiSaveModel: (model) => ipcRenderer.invoke('ai-save-model', model),
+  aiDeleteModel: (id) => ipcRenderer.invoke('ai-delete-model', id),
+  aiToggleModel: (id, enabled) => ipcRenderer.invoke('ai-toggle-model', id, enabled),
+  aiReorderModels: (sortedIds) => ipcRenderer.invoke('ai-reorder-models', sortedIds),
+  aiTestModel: (provider, modelName, thinking) => ipcRenderer.invoke('ai-test-model', provider, modelName, thinking),
+  aiHasUsableModel: () => ipcRenderer.invoke('ai-has-usable-model'),
+  // AI Chat
+  aiChat: (args) => ipcRenderer.invoke('ai-chat', args),
+  aiChatStream: (args, onChunk) => {
+    const streamId = args.streamId || Date.now().toString();
+    const handler = (_, chunk) => {
+      if (chunk.streamId !== streamId) return;
+      onChunk(chunk);
+      if (chunk.type === 'done' || chunk.type === 'error') {
+        ipcRenderer.removeListener('ai-chat-chunk', handler);
+      }
+    };
+    ipcRenderer.on('ai-chat-chunk', handler);
+    ipcRenderer.send('ai-chat-stream', { ...args, streamId });
+    return streamId;
+  },
+  aiChatStreamOff: (streamId) => {
+    // 用于清理（组件卸载时）
+    ipcRenderer.removeAllListeners('ai-chat-chunk');
+  },
   onReminder: (callback) => {
     ipcRenderer.on('reminder-triggered', (_, data) => callback(data));
   },

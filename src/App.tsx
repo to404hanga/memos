@@ -4,6 +4,7 @@ import MemoList from './components/MemoList';
 import Timeline from './components/Timeline';
 import CalendarView from './components/CalendarView';
 import KanbanView from './components/KanbanView';
+import AiChatModal from './components/AiChatModal';
 import type { Memo, MemoFormData, ReminderData, Tag } from '../types/global';
 
 type FilterType = 'all' | 'active' | 'completed';
@@ -27,6 +28,8 @@ export default function App(): React.ReactElement {
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     return (localStorage.getItem('theme') as ThemeMode) || 'auto';
   });
+  const [showAiChat, setShowAiChat] = useState(false);
+  const [aiDraft, setAiDraft] = useState<MemoFormData | null>(null);
 
   // 主题应用
   useEffect(() => {
@@ -93,6 +96,7 @@ export default function App(): React.ReactElement {
     await window.api.addMemo(memo);
     await loadMemos();
     refreshTags();
+    setAiDraft(null);
     setShowForm(false);
   };
 
@@ -148,6 +152,7 @@ export default function App(): React.ReactElement {
 
   const handleCancel = () => {
     setEditingMemo(null);
+    setAiDraft(null);
     setShowForm(false);
   };
 
@@ -181,7 +186,8 @@ export default function App(): React.ReactElement {
   const activeCount = memos.filter((m) => !m.completed).length;
 
   return (
-    <div className="app">
+    <div className={`app ${showAiChat ? 'with-ai-sidebar' : ''}`}>
+      <div className="app-main">
       <header className="app-header">
         <div className="header-top">
           <h1>备忘录</h1>
@@ -249,6 +255,11 @@ export default function App(): React.ReactElement {
               <button className={`theme-btn ${themeMode === 'light' ? 'active' : ''}`} onClick={() => setThemeMode('light')} title="浅色">☀️</button>
               <button className={`theme-btn ${themeMode === 'dark' ? 'active' : ''}`} onClick={() => setThemeMode('dark')} title="深色">🌙</button>
             </div>
+            <button
+              className={`ai-toggle-btn ${showAiChat ? 'active' : ''}`}
+              onClick={() => setShowAiChat((v) => !v)}
+              title={showAiChat ? '收起 AI 助手' : '打开 AI 助手'}
+            >🤖</button>
           </div>
         </div>
         {view === 'list' && (
@@ -290,7 +301,22 @@ export default function App(): React.ReactElement {
         <div className="modal-overlay" onClick={handleCancel}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <MemoForm
-              memo={editingMemo}
+              memo={editingMemo || (aiDraft ? {
+                id: '',
+                title: aiDraft.title,
+                content: aiDraft.content,
+                reminderTime: aiDraft.reminderTime || null,
+                recurrence: aiDraft.recurrence || null,
+                reminders: aiDraft.reminders || [],
+                mutePeriods: aiDraft.mutePeriods || [],
+                attachments: aiDraft.attachments || [],
+                webhook: aiDraft.webhook || null,
+                completed: false,
+                pinned: false,
+                tags: aiDraft.tags || [],
+                createdAt: new Date().toISOString(),
+                deletedAt: null,
+              } : null)}
               onSubmit={editingMemo ? handleUpdate : handleAdd}
               onCancel={handleCancel}
             />
@@ -376,6 +402,24 @@ export default function App(): React.ReactElement {
         </div>
       )}
       </div>
+      </div>{/* /app-main */}
+
+      {showAiChat && (
+        <AiChatModal
+          onClose={() => setShowAiChat(false)}
+          onConfirmCreate={async (memo) => {
+            await window.api.addMemo(memo);
+            await loadMemos();
+            refreshTags();
+          }}
+          onEditDraft={(memo) => {
+            setEditingMemo(null);
+            setAiDraft(memo);
+            setShowAiChat(false);
+            setShowForm(true);
+          }}
+        />
+      )}
 
       {reminder && (
         <div className="reminder-overlay" onClick={() => setReminder(null)}>
