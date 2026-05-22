@@ -2735,8 +2735,6 @@ input, textarea, button {
   display: flex;
   gap: 4px;
   margin-top: 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
 }
 
 .ai-msg-actions.align-left {
@@ -2745,10 +2743,6 @@ input, textarea, button {
 
 .ai-msg-actions.align-right {
   justify-content: flex-end;
-}
-
-.ai-msg:hover .ai-msg-actions {
-  opacity: 1;
 }
 
 .ai-msg-action-btn {
