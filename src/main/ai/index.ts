@@ -95,13 +95,16 @@ export const AI_TOOLS_OPENAI = [
     type: 'function',
     function: {
       name: 'list_memos',
-      description: '查询用户已有的备忘录/待办列表。可按关键词、标签、状态筛选。',
+      description: '查询用户已有的备忘录/待办列表。可按关键词、标签、状态、时间范围筛选。支持多关键词（AND 交集匹配）。',
       parameters: {
         type: 'object',
         properties: {
-          keyword: { type: 'string', description: '在标题或内容中搜索的关键词，可选' },
+          keyword: { type: 'string', description: '在标题或内容中搜索的关键词（多个词空格分隔，取交集），可选' },
+          keywords: { type: 'array', items: { type: 'string' }, description: '多关键词数组（OR 并集匹配，适合同义词/近义词扩展搜索），可选。若同时提供 keyword 和 keywords，将合并使用' },
           tag: { type: 'string', description: '只返回包含此标签的备忘录，可选' },
           status: { type: 'string', enum: ['all', 'active', 'completed'], description: '过滤状态' },
+          dateFrom: { type: 'string', description: '起始日期（含），ISO 8601 或 YYYY-MM-DD 格式，可选' },
+          dateTo: { type: 'string', description: '截止日期（含），ISO 8601 或 YYYY-MM-DD 格式，可选' },
         },
       },
     },
@@ -174,21 +177,59 @@ function executeServerTool(name: string, args: any, mainWindow: BrowserWindow | 
   if (name === 'list_memos') {
     const all = getAllMemos();
     const status = args && args.status;
-    const keyword = args && typeof args.keyword === 'string' ? args.keyword.trim().toLowerCase() : '';
+    const keyword = args && typeof args.keyword === 'string' ? args.keyword.trim() : '';
+    const keywords: string[] = args && Array.isArray(args.keywords) ? args.keywords.map((k: any) => String(k).trim().toLowerCase()).filter(Boolean) : [];
     const tag = args && typeof args.tag === 'string' ? args.tag.trim() : '';
+    const dateFrom = args && typeof args.dateFrom === 'string' ? args.dateFrom.trim() : '';
+    const dateTo = args && typeof args.dateTo === 'string' ? args.dateTo.trim() : '';
 
     let filtered = all;
+
+    // 状态过滤
     if (!status || status === 'active') filtered = filtered.filter((m) => !m.completed);
     else if (status === 'completed') filtered = filtered.filter((m) => m.completed);
 
+    // 关键词过滤：keyword 按空格拆分取 AND 交集
     if (keyword) {
-      filtered = filtered.filter((m) =>
-        (m.title || '').toLowerCase().includes(keyword) ||
-        (m.content || '').toLowerCase().includes(keyword)
-      );
+      const andKeywords = keyword.toLowerCase().split(/\s+/).filter(Boolean);
+      filtered = filtered.filter((m) => {
+        const title = (m.title || '').toLowerCase();
+        const content = (m.content || '').toLowerCase();
+        return andKeywords.every((k) => title.includes(k) || content.includes(k));
+      });
     }
+
+    // keywords 数组：OR 并集匹配（适合同义词扩展搜索）
+    if (keywords.length > 0) {
+      filtered = filtered.filter((m) => {
+        const title = (m.title || '').toLowerCase();
+        const content = (m.content || '').toLowerCase();
+        return keywords.some((k) => title.includes(k) || content.includes(k));
+      });
+    }
+
+    // 标签过滤
     if (tag) {
       filtered = filtered.filter((m) => Array.isArray(m.tags) && m.tags.includes(tag));
+    }
+
+    // 时间范围过滤
+    if (dateFrom) {
+      const from = new Date(dateFrom).getTime();
+      if (!isNaN(from)) {
+        filtered = filtered.filter((m) => new Date(m.createdAt).getTime() >= from);
+      }
+    }
+    if (dateTo) {
+      // dateTo 如果是日期格式（无时间），设置为当天结束
+      let toDate = new Date(dateTo);
+      if (!isNaN(toDate.getTime())) {
+        if (dateTo.length <= 10) {
+          // YYYY-MM-DD 格式，设置为当天 23:59:59
+          toDate = new Date(dateTo + 'T23:59:59');
+        }
+        filtered = filtered.filter((m) => new Date(m.createdAt).getTime() <= toDate.getTime());
+      }
     }
 
     const items = filtered.map((m) => {
@@ -397,7 +438,7 @@ function buildSystemPrompt(): string {
     '',
     '可用工具：',
     '- create_memo：创建新待办，仅生成预览卡片，需用户点击「✓ 创建」才落库',
-    '- list_memos：查询用户已有的待办列表',
+    '- list_memos：查询用户已有的待办列表。支持多关键词搜索（keyword 空格分隔取交集，keywords 数组取并集），可按标签、状态、时间范围筛选',
     '- complete_memo：标记待办为已完成（或 undo 取消完成）',
     '- delete_memo：删除待办（移入回收站）',
     '- update_memo：修改待办的标题/内容/标签/提醒时间/周期',
@@ -413,6 +454,8 @@ function buildSystemPrompt(): string {
     '8. 缺关键信息时主动询问',
     '9. 调用 create_memo 仅生成预览卡片，可放心调用',
     '10. 回复使用中文，简洁友好',
+    '11. 搜索技巧：若单个关键词搜不到结果，尝试用 keywords 数组传入同义词/近义词/相关词扩展搜索',
+    '12. 时间范围查询：用户说"这个月"/"上周"/"最近三天"等，转为 dateFrom/dateTo 参数',
   ].join('\n');
 }
 

@@ -122,11 +122,26 @@ export function cleanupOldConversations(): void {
   saveDb();
 }
 
+/**
+ * 多关键词搜索备忘录
+ * 支持空格分隔的多关键词（取交集），每个词在标题或内容中匹配即可
+ */
 export function searchMemos(keyword: string): Memo[] {
   const db = getDb();
-  const k = `%${keyword}%`;
-  const stmt = db.prepare('SELECT * FROM memos WHERE deleted_at IS NULL AND (title LIKE ? OR content LIKE ?) ORDER BY pinned DESC, created_at DESC');
-  stmt.bind([k, k]);
+  const input = keyword.trim();
+  if (!input) return getAllMemos();
+
+  // 按空格拆分为多个关键词
+  const keywords = input.split(/\s+/).filter(Boolean);
+  if (keywords.length === 0) return getAllMemos();
+
+  // 构建 SQL：每个关键词都需要在 title 或 content 中出现（AND 交集）
+  const conditions = keywords.map(() => '(title LIKE ? OR content LIKE ?)').join(' AND ');
+  const sql = `SELECT * FROM memos WHERE deleted_at IS NULL AND ${conditions} ORDER BY pinned DESC, created_at DESC`;
+  const params = keywords.flatMap((k) => [`%${k}%`, `%${k}%`]);
+
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
   const rows: any[] = [];
   while (stmt.step()) rows.push(stmt.getAsObject());
   stmt.free();
