@@ -47,6 +47,7 @@ export function aiArgsToMemo(args: AiCreateMemoArgs): MemoFormData {
     reminderTime: args.reminderTime || null,
     recurrence: args.recurrence || null,
     reminders,
+    mutePeriods: args.mutePeriods || [],
   };
 }
 
@@ -86,6 +87,16 @@ export default function AiPreviewCard({ args, status, onConfirm, onEdit }: Props
           <span className="ai-preview-value">
             {args.tags.map((t) => (
               <span key={t} className="tag-chip">{t}</span>
+            ))}
+          </span>
+        </div>
+      )}
+      {args.mutePeriods && args.mutePeriods.length > 0 && (
+        <div className="ai-preview-row">
+          <span className="ai-preview-label">🔇 静默期</span>
+          <span className="ai-preview-value">
+            {args.mutePeriods.map((p, i) => (
+              <span key={i}>{p.from} ~ {p.to}{i < args.mutePeriods!.length - 1 ? '、' : ''}</span>
             ))}
           </span>
         </div>

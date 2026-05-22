@@ -27,12 +27,26 @@ export const AI_TOOLS_OPENAI = [
           tags: { type: 'array', items: { type: 'string' }, description: '标签列表' },
           reminderTime: { type: 'string', description: 'ISO 8601 格式的提醒时间，如 2026-05-21T15:00:00+08:00' },
           recurrence: {
-            type: 'object', description: '周期提醒配置',
+            type: 'object', description: '周期提醒配置。type=weekly 时必须提供 dayOfWeek；type=monthly 时必须提供 dayOfMonth',
             properties: {
               type: { type: 'string', enum: ['once', 'daily', 'workday', 'weekly', 'monthly'] },
-              hour: { type: 'number' }, minute: { type: 'number' },
-              dayOfWeek: { type: 'number', description: '0=周日, 1=周一, ..., 6=周六' },
-              dayOfMonth: { type: 'number' },
+              hour: { type: 'number', description: '提醒的小时（0-23）' },
+              minute: { type: 'number', description: '提醒的分钟（0-59）' },
+              dayOfWeek: { type: 'number', description: 'weekly 必填。0=周日, 1=周一, ..., 6=周六' },
+              dayOfMonth: { type: 'number', description: 'monthly 必填。每月几号（1-31）' },
+            },
+            required: ['type', 'hour', 'minute'],
+          },
+          mutePeriods: {
+            type: 'array',
+            description: '静默期列表，在这些日期范围内不提醒',
+            items: {
+              type: 'object',
+              properties: {
+                from: { type: 'string', description: '起始日期 YYYY-MM-DD' },
+                to: { type: 'string', description: '结束日期 YYYY-MM-DD' },
+              },
+              required: ['from', 'to'],
             },
           },
         },

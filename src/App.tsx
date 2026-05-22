@@ -433,6 +433,15 @@ export default function App(): React.ReactElement {
         <AiChatModal
           onClose={() => setShowAiChat(false)}
           onConfirmCreate={async (memo) => {
+            // 自动创建不存在的标签
+            if (memo.tags && memo.tags.length > 0) {
+              const existingNames = allTags.map((t: any) => t.name);
+              for (const tagName of memo.tags) {
+                if (!existingNames.includes(tagName)) {
+                  await window.api.addTag({ name: tagName });
+                }
+              }
+            }
             await window.api.addMemo(memo);
             await loadMemos();
             refreshTags();

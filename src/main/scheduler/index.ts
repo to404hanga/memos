@@ -73,7 +73,7 @@ function getNextOccurrence(recurrence: any): Date | null {
   }
 
   if (type === 'weekly') {
-    const dayOfWeek = recurrence.dayOfWeek;
+    const dayOfWeek = recurrence.dayOfWeek ?? 1; // 默认周一
     const next = new Date(now);
     next.setHours(hour, minute, 0, 0);
     const currentDay = now.getDay();

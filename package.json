@@ -10,7 +10,7 @@
   "scripts": {
     "build:main": "npx webpack --config webpack.main.config.js",
     "start": "npm run build:main && electron .",
-    "dev": "concurrently \"npx webpack serve --mode development\" \"npx webpack --config webpack.main.config.js --watch\" \"wait-on http://localhost:3000 && DEV_SERVER=1 electron .\""
+    "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && DEV_SERVER=1 electron .\""
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
@@ -35,6 +35,7 @@
     "css-loader": "^6.10.0",
     "electron": "^28.2.0",
     "electron-rebuild": "^3.2.9",
+    "electronmon": "^2.0.4",
     "html-webpack-plugin": "^5.6.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -117,6 +117,7 @@ export interface AiCreateMemoArgs {
   tags?: string[];
   reminderTime?: string;
   recurrence?: Recurrence;
+  mutePeriods?: Array<{ from: string; to: string }>;
 }
 
 export interface AiMessage {
