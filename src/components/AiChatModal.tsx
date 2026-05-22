@@ -189,7 +189,11 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
       const m = models.find((x) => x.id === modelChoice);
       maxK = m?.maxContext || 0;
     }
-    const usedChars = messages.reduce((sum, m) => sum + (m.content || '').length + (m.thinking || '').length, 0);
+    const usedChars = messages.reduce((sum, m) => {
+      let len = (m.content || '').length;
+      if (m.toolCalls) len += JSON.stringify(m.toolCalls).length;
+      return sum + len;
+    }, 0);
     const usedK = Math.round(usedChars / 1024);
     const ratio = maxK > 0 ? Math.min(usedK / maxK, 1) : 0;
     return { usedK, maxK, ratio };
@@ -204,11 +208,12 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
     setMessages(next);
     setSending(true);
 
-    const wireMessages: AiMessage[] = next.map((m) => ({
-      role: m.role,
-      content: m.content,
-      ts: m.ts,
-    }));
+    // 构造发送给模型的消息，保留 toolCalls 但排除 thinking
+    const wireMessages: AiMessage[] = next.map((m) => {
+      const msg: any = { role: m.role, content: m.content, ts: m.ts };
+      if (m.toolCalls && m.toolCalls.length > 0) msg.toolCalls = m.toolCalls;
+      return msg as AiMessage;
+    });
 
     // 插入一个 streaming placeholder
     const placeholderIdx = next.length;
