@@ -179,7 +179,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
     return `📌 ${p?.name || '?'} / ${display}`;
   })();
 
-  // 上下文使用量计算
+  // 上下文使用量计算（有效窗口 = maxContext - 20K 输出预留）
   const contextInfo = (() => {
     let maxK = 0;
     if (modelChoice === 'auto') {
@@ -189,14 +189,15 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
       const m = models.find((x) => x.id === modelChoice);
       maxK = m?.maxContext || 0;
     }
+    const effectiveMaxK = Math.max(maxK - 20, 0); // 预留 20K 给输出
     const usedChars = messages.reduce((sum, m) => {
       let len = (m.content || '').length;
       if (m.toolCalls) len += JSON.stringify(m.toolCalls).length;
       return sum + len;
     }, 0);
     const usedK = Math.round(usedChars / 1024);
-    const ratio = maxK > 0 ? Math.min(usedK / maxK, 1) : 0;
-    return { usedK, maxK, ratio };
+    const ratio = effectiveMaxK > 0 ? Math.min(usedK / effectiveMaxK, 1) : 0;
+    return { usedK, maxK: effectiveMaxK, ratio };
   })();
 
   const send = async () => {

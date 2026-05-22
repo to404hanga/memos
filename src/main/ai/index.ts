@@ -380,11 +380,21 @@ function buildSystemPrompt(): string {
 }
 
 // ===== 模型调用统一入口 =====
+// 输出预留和压缩缓冲（单位：字符，按 1 token ≈ 4 chars 估算）
+const OUTPUT_RESERVE_CHARS = 20000 * 4;  // 20K tokens
+const COMPRESS_BUFFER_CHARS = 13000 * 4; // 13K tokens
+const MAX_PTL_RETRIES = 3;
+
+function calcTotalChars(messages: any[]): number {
+  return messages.reduce((sum, m) => sum + JSON.stringify(m).length, 0);
+}
+
+// 简单截断（最终兜底）
 function truncateMessages(messages: any[], maxContextK?: number): any[] {
   if (!maxContextK || maxContextK <= 0) return messages;
-  const maxChars = maxContextK * 1024; // 粗略估算：1K ≈ 1024 字符
+  const maxChars = maxContextK * 1024 - OUTPUT_RESERVE_CHARS;
+  if (maxChars <= 0) return messages;
   let totalChars = 0;
-  // 从最新消息向前保留，确保最新上下文优先
   const result: any[] = [];
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
@@ -396,16 +406,271 @@ function truncateMessages(messages: any[], maxContextK?: number): any[] {
   return result;
 }
 
-function invokeModel(provider: AiProvider, model: AiModel, messages: any[], onDelta?: OnDelta): Promise<LLMResult> {
+// ===== Full Compact（传统压缩） =====
+
+// 预处理：去除图片/附件内容，降低压缩请求的 token 消耗
+function stripForCompact(messages: any[]): any[] {
+  return messages.map((m) => {
+    let content = m.content || '';
+    // 图片 → [image]
+    content = content.replace(/!\[[^\]]*\]\([^)]+\)/g, '[image]');
+    // 超长内容截断（防止单条消息过长导致压缩请求本身超限）
+    if (content.length > 8000) {
+      content = content.slice(0, 4000) + '\n...[内容已截断]...\n' + content.slice(-2000);
+    }
+    return { ...m, content };
+  });
+}
+
+// Full Compact 摘要 Prompt
+const FULL_COMPACT_SYSTEM = `你是一个对话摘要专家。你的任务是将对话历史压缩为结构化摘要。
+
+CRITICAL: 仅输出纯文本。不要调用任何工具。
+你的回复必须包含一个 <analysis> 块和一个 <summary> 块。`;
+
+const FULL_COMPACT_USER_TEMPLATE = `请将以下对话历史压缩为结构化摘要。
+
+要求：
+1. 先在 <analysis> 中进行思考（这部分之后会被删除）
+2. 然后在 <summary> 中输出最终摘要
+
+摘要格式：
+<summary>
+1. 用户请求与意图:
+   [详细描述用户的所有请求和意图]
+
+2. 关键技术概念:
+   - [概念1]
+   - [概念2]
+
+3. 已完成的操作:
+   - [操作1及结果]
+   - [操作2及结果]
+
+4. 错误与修复:
+   - [错误描述]: [修复方式]
+
+5. 所有用户消息摘要:
+   - [逐条概括用户发送的消息]
+
+6. 待办事项:
+   - [尚未完成的任务]
+
+7. 当前工作状态:
+   [精确描述当前进展]
+</summary>
+
+以下是需要压缩的对话历史：
+
+`;
+
+// 后处理：提取 summary，删除 analysis
+function formatCompactSummary(raw: string): string {
+  // 删除 analysis 块
+  let result = raw.replace(/<analysis>[\s\S]*?<\/analysis>/g, '');
+  // 提取 summary 内容
+  const match = result.match(/<summary>([\s\S]*?)<\/summary>/);
+  if (match) {
+    result = `[对话摘要]\n${match[1].trim()}\n[摘要结束]`;
+  } else {
+    // 没有 XML 标签，当作纯文本摘要
+    result = `[对话摘要]\n${result.trim()}\n[摘要结束]`;
+  }
+  return result.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// Full Compact 主流程
+async function fullCompact(
+  messages: any[], provider: AiProvider, model: AiModel, maxContextK: number
+): Promise<any[]> {
+  const keepHead = 2;
+  const keepTail = 2;
+
+  if (messages.length < keepHead + keepTail + 1) {
+    return truncateMessages(messages, maxContextK);
+  }
+
+  const head = messages.slice(0, keepHead);
+  const tail = messages.slice(-keepTail);
+  const toCompress = messages.slice(keepHead, -keepTail);
+
+  if (toCompress.length === 0) return messages;
+
+  // 预处理
+  const stripped = stripForCompact(toCompress);
+
+  // 构造对话文本
+  const conversationText = stripped.map((m) => {
+    const role = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'Tool';
+    let text = `[${role}]: ${m.content || ''}`;
+    if (m.toolCalls && m.toolCalls.length > 0) {
+      text += `\n  [工具调用: ${m.toolCalls.map((tc: any) => `${tc.name}(${JSON.stringify(tc.arguments).slice(0, 100)})`).join(', ')}]`;
+    }
+    if (m.toolCallId) {
+      text += ` (tool_call_id: ${m.toolCallId})`;
+    }
+    return text;
+  }).join('\n\n');
+
+  const compactPrompt = [
+    { role: 'user', content: FULL_COMPACT_USER_TEMPLATE + conversationText },
+  ];
+
+  // 尝试调用 LLM 生成摘要（带 PTL 重试）
+  let retries = 0;
+  let currentPrompt = compactPrompt;
+
+  while (retries <= MAX_PTL_RETRIES) {
+    try {
+      let result;
+      if (provider.type === 'anthropic') {
+        result = await callAnthropic(provider, model, currentPrompt, [], FULL_COMPACT_SYSTEM);
+      } else if (provider.type === 'ollama') {
+        result = await callOllama(provider, model, currentPrompt, [], FULL_COMPACT_SYSTEM);
+      } else {
+        result = await callOpenAi(provider, model, currentPrompt, [], FULL_COMPACT_SYSTEM);
+      }
+
+      const summary = formatCompactSummary(result.content || '');
+      if (!summary || summary.length < 50) {
+        throw new Error('摘要内容过短');
+      }
+
+      // 构造压缩后的消息序列
+      const summaryMsg = { role: 'user', content: summary };
+      const compressedResult = [...head, summaryMsg, ...tail];
+
+      // 验证压缩后是否在限制内
+      const compressedChars = calcTotalChars(compressedResult);
+      const effectiveMax = maxContextK * 1024 - OUTPUT_RESERVE_CHARS;
+      if (compressedChars > effectiveMax) {
+        // 压缩后仍超限，截断 tail
+        return truncateMessages(compressedResult, maxContextK);
+      }
+
+      console.log(`[Compact] Full Compact 成功: ${toCompress.length} 条消息 → 摘要 ${summary.length} 字符`);
+      return compressedResult;
+    } catch (err: any) {
+      const errMsg = err.message || String(err);
+      // 检测是否是 Prompt Too Long 错误
+      if (errMsg.includes('too long') || errMsg.includes('too many tokens') || errMsg.includes('context_length')) {
+        retries++;
+        if (retries > MAX_PTL_RETRIES) break;
+        // PTL 重试：删除 20% 最旧的压缩内容
+        const dropCount = Math.max(1, Math.floor(stripped.length * 0.2));
+        const trimmed = stripped.slice(dropCount);
+        const trimmedText = trimmed.map((m) => {
+          const role = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'Tool';
+          return `[${role}]: ${m.content || ''}`;
+        }).join('\n\n');
+        currentPrompt = [{ role: 'user', content: FULL_COMPACT_USER_TEMPLATE + trimmedText }];
+        console.warn(`[Compact] PTL 重试 ${retries}/${MAX_PTL_RETRIES}，裁剪 ${dropCount} 条`);
+        continue;
+      }
+      // 其他错误直接抛出
+      throw err;
+    }
+  }
+
+  // 所有重试失败
+  throw new Error('Full Compact 失败：压缩请求超过上下文限制');
+}
+
+// ===== 智能压缩主入口 =====
+// 第1层：简单摘要（快速，用于一般情况）
+// 第2层：Full Compact（结构化摘要，简单摘要失败时回退）
+// 第3层：截断（最终兜底）
+async function compressMessages(
+  messages: any[], maxContextK: number,
+  provider: AiProvider, model: AiModel
+): Promise<any[]> {
+  const effectiveMaxChars = maxContextK * 1024 - OUTPUT_RESERVE_CHARS;
+  const compressThreshold = effectiveMaxChars - COMPRESS_BUFFER_CHARS;
+
+  if (compressThreshold <= 0) return truncateMessages(messages, maxContextK);
+
+  const totalChars = calcTotalChars(messages);
+  if (totalChars <= compressThreshold) return messages;
+
+  console.log(`[Compact] 触发压缩: ${Math.round(totalChars / 1024)}K > 阈值 ${Math.round(compressThreshold / 1024)}K`);
+
+  // 不足 5 条则直接截断
+  if (messages.length < 5) return truncateMessages(messages, maxContextK);
+
+  // 第1层：简单摘要（保留前2+后2，中间简短摘要）
+  try {
+    const keepHead = 2;
+    const keepTail = 2;
+    const head = messages.slice(0, keepHead);
+    const tail = messages.slice(-keepTail);
+    const middle = messages.slice(keepHead, -keepTail);
+
+    if (middle.length === 0) return truncateMessages(messages, maxContextK);
+
+    const middleText = middle.map((m) => {
+      const role = m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : '工具';
+      let text = `[${role}] ${m.content || ''}`;
+      if (m.toolCalls && m.toolCalls.length > 0) {
+        text += ` [调用工具: ${m.toolCalls.map((tc: any) => tc.name).join(', ')}]`;
+      }
+      return text;
+    }).join('\n');
+
+    // 简短摘要 prompt
+    const summaryPrompt = [
+      { role: 'user', content: `请将以下对话历史压缩为简洁的摘要（保留关键信息、用户意图、已完成的操作），用中文，不超过 500 字：\n\n${middleText}` },
+    ];
+
+    const sysPrompt = '你是一个对话摘要助手，将对话压缩为简洁摘要。不要调用任何工具，仅输出纯文本。';
+    let result;
+    if (provider.type === 'anthropic') {
+      result = await callAnthropic(provider, model, summaryPrompt, [], sysPrompt);
+    } else if (provider.type === 'ollama') {
+      result = await callOllama(provider, model, summaryPrompt, [], sysPrompt);
+    } else {
+      result = await callOpenAi(provider, model, summaryPrompt, [], sysPrompt);
+    }
+
+    const summary = result.content || '';
+    if (summary.length >= 50) {
+      const summaryMsg = { role: 'user', content: `[以下是之前对话的摘要]\n${summary}\n[摘要结束，以下是最近的对话]` };
+      const compressed = [...head, summaryMsg, ...tail];
+      // 验证压缩后是否达标
+      if (calcTotalChars(compressed) <= effectiveMaxChars) {
+        console.log(`[Compact] 简单摘要成功: ${middle.length} 条 → ${summary.length} 字符`);
+        return compressed;
+      }
+    }
+    // 简单摘要不够短或失败，回退到 Full Compact
+    console.warn('[Compact] 简单摘要后仍超限，回退到 Full Compact');
+  } catch (e) {
+    console.warn('[Compact] 简单摘要失败，回退到 Full Compact:', e);
+  }
+
+  // 第2层：Full Compact
+  try {
+    return await fullCompact(messages, provider, model, maxContextK);
+  } catch (e) {
+    console.warn('[Compact] Full Compact 失败，回退到截断:', e);
+  }
+
+  // 第3层：截断
+  return truncateMessages(messages, maxContextK);
+}
+
+async function invokeModel(provider: AiProvider, model: AiModel, messages: any[], onDelta?: OnDelta): Promise<LLMResult> {
   const systemPrompt = buildSystemPrompt();
-  const truncated = truncateMessages(messages, model.maxContext);
+  // 智能压缩上下文
+  const compressed = model.maxContext
+    ? await compressMessages(messages, model.maxContext, provider, model)
+    : messages;
   if (provider.type === 'anthropic') {
-    return callAnthropic(provider, model, truncated, AI_TOOLS_ANTHROPIC, systemPrompt, onDelta);
+    return callAnthropic(provider, model, compressed, AI_TOOLS_ANTHROPIC, systemPrompt, onDelta);
   }
   if (provider.type === 'ollama') {
-    return callOllama(provider, model, truncated, AI_TOOLS_OPENAI.map((t) => t.function), systemPrompt, onDelta);
+    return callOllama(provider, model, compressed, AI_TOOLS_OPENAI.map((t) => t.function), systemPrompt, onDelta);
   }
-  return callOpenAi(provider, model, truncated, AI_TOOLS_OPENAI, systemPrompt, onDelta);
+  return callOpenAi(provider, model, compressed, AI_TOOLS_OPENAI, systemPrompt, onDelta);
 }
 
 function modelLabel(provider: AiProvider, model: AiModel): string {
