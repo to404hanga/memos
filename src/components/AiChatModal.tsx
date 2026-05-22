@@ -179,6 +179,22 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
     return `📌 ${p?.name || '?'} / ${display}`;
   })();
 
+  // 上下文使用量计算
+  const contextInfo = (() => {
+    let maxK = 0;
+    if (modelChoice === 'auto') {
+      const sorted = [...models].filter((m) => m.enabled).sort((a, b) => a.priority - b.priority);
+      maxK = sorted[0]?.maxContext || 0;
+    } else {
+      const m = models.find((x) => x.id === modelChoice);
+      maxK = m?.maxContext || 0;
+    }
+    const usedChars = messages.reduce((sum, m) => sum + (m.content || '').length + (m.thinking || '').length, 0);
+    const usedK = Math.round(usedChars / 1024);
+    const ratio = maxK > 0 ? Math.min(usedK / maxK, 1) : 0;
+    return { usedK, maxK, ratio };
+  })();
+
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
@@ -617,18 +633,35 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
                   </svg>
                 </button>
               ) : (
-                <button
-                  className="ai-composer-send"
-                  onClick={send}
-                  disabled={!input.trim()}
-                  title="发送 (Enter)"
-                  aria-label="发送"
-                >
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                    <polyline points="13 6 19 12 13 18"></polyline>
+                <div className="ai-composer-right">
+                  {contextInfo.maxK > 0 && (
+                    <div className="ai-context-ring" title={`上下文 ${contextInfo.usedK}K / ${contextInfo.maxK}K`}>
+                      <svg viewBox="0 0 24 24" width="32" height="32">
+                        <circle cx="12" cy="12" r="9" fill="none" stroke="var(--border-input)" strokeWidth="2" />
+                        <circle
+                          cx="12" cy="12" r="9" fill="none"
+                          stroke={contextInfo.ratio > 0.85 ? '#ff3b30' : contextInfo.ratio > 0.6 ? '#ff9500' : 'var(--accent)'}
+                          strokeWidth="2"
+                          strokeDasharray={`${contextInfo.ratio * 56.5} 56.5`}
+                          strokeLinecap="round"
+                          transform="rotate(-90 12 12)"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                  <button
+                    className="ai-composer-send"
+                    onClick={send}
+                    disabled={!input.trim()}
+                    title="发送 (Enter)"
+                    aria-label="发送"
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="13 6 19 12 13 18"></polyline>
                   </svg>
                 </button>
+                </div>
               )}
             </div>
             {showModelMenu && (

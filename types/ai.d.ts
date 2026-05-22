@@ -22,6 +22,7 @@ export interface AiModel {
   displayName?: string;
   enabled: boolean;
   thinking: boolean;
+  maxContext?: number; // 最大上下文长度（单位 K，如 128 表示 128K）
   priority: number;
   lastError?: string;
   lastUsedAt?: string;

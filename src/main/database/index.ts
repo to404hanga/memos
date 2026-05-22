@@ -130,6 +130,13 @@ export async function initDatabase(): Promise<void> {
     db.run('CREATE INDEX IF NOT EXISTS idx_ai_models_provider ON ai_models(provider_id)');
   } catch (e) {}
 
+  // 迁移: 添加 max_context 列
+  try {
+    db.run('SELECT max_context FROM ai_models LIMIT 1');
+  } catch (e) {
+    db.run('ALTER TABLE ai_models ADD COLUMN max_context INTEGER DEFAULT NULL');
+  }
+
   // 对话历史表
   db.run(`
     CREATE TABLE IF NOT EXISTS ai_conversations (

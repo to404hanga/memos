@@ -38,6 +38,7 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
   const [newModelName, setNewModelName] = useState('');
   const [newModelAlias, setNewModelAlias] = useState('');
   const [newModelThinking, setNewModelThinking] = useState(false);
+  const [newModelMaxContext, setNewModelMaxContext] = useState<string>('');
   const [editingModelId, setEditingModelId] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, AiTestResult>>({});
@@ -101,6 +102,7 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
     setNewModelName('');
     setNewModelAlias('');
     setNewModelThinking(false);
+    setNewModelMaxContext('');
     setEditingModelId(null);
     setShowAddModel(false);
   };
@@ -109,6 +111,7 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
     setNewModelName(m.name);
     setNewModelAlias(m.displayName || '');
     setNewModelThinking(m.thinking);
+    setNewModelMaxContext(m.maxContext ? String(m.maxContext) : '');
     setEditingModelId(m.id);
     setShowAddModel(true);
   };
@@ -121,6 +124,8 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
     const name = newModelName.trim();
     const alias = newModelAlias.trim() || undefined;
 
+    const maxCtx = newModelMaxContext.trim() ? parseInt(newModelMaxContext.trim(), 10) : undefined;
+
     if (editingModelId) {
       // 编辑：允许同名（同一个），别处不能重名
       const conflict = providerModels.find((m) => m.id !== editingModelId && m.name === name);
@@ -132,6 +137,7 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
         displayName: alias,
         enabled: true,
         thinking: newModelThinking,
+        maxContext: maxCtx,
       });
     } else {
       if (providerModels.find((m) => m.name === name)) {
@@ -144,6 +150,7 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
         displayName: alias,
         enabled: true,
         thinking: newModelThinking,
+        maxContext: maxCtx,
       });
     }
     resetAddModelForm();
@@ -303,7 +310,7 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
                       className="ai-pane-add"
                       onClick={() => {
                         if (showAddModel) resetAddModelForm();
-                        else { setEditingModelId(null); setNewModelName(''); setNewModelAlias(''); setNewModelThinking(false); setShowAddModel(true); }
+                        else { setEditingModelId(null); setNewModelName(''); setNewModelAlias(''); setNewModelThinking(false); setNewModelMaxContext(''); setShowAddModel(true); }
                       }}
                     >
                       {showAddModel ? '✕ 取消' : '+ 添加模型'}
@@ -370,6 +377,21 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
                           🧠 启用思考模式（reasoning / extended thinking）
                         </label>
                         <p className="hint">仅对支持的模型生效（o1/r1/qwq/claude-sonnet-4 等）</p>
+                      </div>
+                      <div className="ai-add-form-row">
+                        <label>最大上下文</label>
+                        <div className="ai-context-input">
+                          <input
+                            type="number"
+                            value={newModelMaxContext}
+                            onChange={(e) => setNewModelMaxContext(e.target.value)}
+                            placeholder="如 128"
+                            min="1"
+                            style={{ width: 80 }}
+                          />
+                          <span className="ai-context-unit">K</span>
+                        </div>
+                        <p className="hint">限制发送给模型的上下文长度，留空则不限制</p>
                       </div>
                       <div className="ai-add-form-actions">
                         <button className="btn-cancel" onClick={resetAddModelForm}>取消</button>

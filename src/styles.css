@@ -3960,6 +3960,20 @@ input, textarea, button {
   opacity: 0.6;
 }
 
+.ai-context-ring {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+.ai-composer-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .ai-composer-send {
   width: 32px;
   height: 32px;

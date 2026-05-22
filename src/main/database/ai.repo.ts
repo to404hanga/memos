@@ -17,6 +17,7 @@ export interface AiModel {
   displayName?: string;
   enabled: boolean;
   thinking: boolean;
+  maxContext?: number;
   priority: number;
   lastError?: string;
   lastUsedAt?: string;
@@ -42,6 +43,7 @@ function rowToModel(row: any): AiModel {
     displayName: row.display_name || undefined,
     enabled: row.enabled === 1,
     thinking: row.thinking === 1,
+    maxContext: row.max_context || undefined,
     priority: row.priority,
     lastError: row.last_error || undefined,
     lastUsedAt: row.last_used_at || undefined,
@@ -145,8 +147,8 @@ export function saveModel(input: any): AiModel {
   const isUpdate = input.id && getModelById(input.id);
   if (isUpdate) {
     db.run(
-      'UPDATE ai_models SET name = ?, display_name = ?, thinking = ? WHERE id = ?',
-      [input.name, input.displayName || null, input.thinking ? 1 : 0, input.id]
+      'UPDATE ai_models SET name = ?, display_name = ?, thinking = ?, max_context = ? WHERE id = ?',
+      [input.name, input.displayName || null, input.thinking ? 1 : 0, input.maxContext || null, input.id]
     );
     saveDb();
     return getModelById(input.id)!;

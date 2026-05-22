@@ -380,15 +380,32 @@ function buildSystemPrompt(): string {
 }
 
 // ===== 模型调用统一入口 =====
+function truncateMessages(messages: any[], maxContextK?: number): any[] {
+  if (!maxContextK || maxContextK <= 0) return messages;
+  const maxChars = maxContextK * 1024; // 粗略估算：1K ≈ 1024 字符
+  let totalChars = 0;
+  // 从最新消息向前保留，确保最新上下文优先
+  const result: any[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    const msgLen = JSON.stringify(msg).length;
+    if (totalChars + msgLen > maxChars && result.length > 0) break;
+    totalChars += msgLen;
+    result.unshift(msg);
+  }
+  return result;
+}
+
 function invokeModel(provider: AiProvider, model: AiModel, messages: any[], onDelta?: OnDelta): Promise<LLMResult> {
   const systemPrompt = buildSystemPrompt();
+  const truncated = truncateMessages(messages, model.maxContext);
   if (provider.type === 'anthropic') {
-    return callAnthropic(provider, model, messages, AI_TOOLS_ANTHROPIC, systemPrompt, onDelta);
+    return callAnthropic(provider, model, truncated, AI_TOOLS_ANTHROPIC, systemPrompt, onDelta);
   }
   if (provider.type === 'ollama') {
-    return callOllama(provider, model, messages, AI_TOOLS_OPENAI.map((t) => t.function), systemPrompt, onDelta);
+    return callOllama(provider, model, truncated, AI_TOOLS_OPENAI.map((t) => t.function), systemPrompt, onDelta);
   }
-  return callOpenAi(provider, model, messages, AI_TOOLS_OPENAI, systemPrompt, onDelta);
+  return callOpenAi(provider, model, truncated, AI_TOOLS_OPENAI, systemPrompt, onDelta);
 }
 
 function modelLabel(provider: AiProvider, model: AiModel): string {
