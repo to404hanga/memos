@@ -1,0 +1,49 @@
+/* ===== 主题变量 ===== */
+:root {
+  --bg-primary: #f5f5f7;
+  --bg-secondary: #fff;
+  --bg-tertiary: #fafafa;
+  --bg-hover: #f8f8fa;
+  --text-primary: #1d1d1f;
+  --text-secondary: #666;
+  --text-tertiary: #999;
+  --text-muted: #bbb;
+  --border: rgba(0, 0, 0, 0.06);
+  --border-input: #e0e0e0;
+  --accent: #007aff;
+  --accent-bg: rgba(0, 122, 255, 0.1);
+  --card-bg: #fff;
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --card-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --header-bg: rgba(245, 245, 247, 0.85);
+  --modal-bg: #fff;
+  --tag-bg: rgba(0, 0, 0, 0.04);
+  --code-bg: rgba(0, 0, 0, 0.06);
+  --pre-bg: #1e1e1e;
+  --pre-color: #d4d4d4;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-primary: #1c1c1e;
+  --bg-secondary: #2c2c2e;
+  --bg-tertiary: #3a3a3c;
+  --bg-hover: #3a3a3c;
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #6e6e73;
+  --text-muted: #48484a;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-input: #48484a;
+  --accent: #0a84ff;
+  --accent-bg: rgba(10, 132, 255, 0.15);
+  --card-bg: #2c2c2e;
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --card-shadow-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --header-bg: rgba(28, 28, 30, 0.85);
+  --modal-bg: #2c2c2e;
+  --tag-bg: rgba(255, 255, 255, 0.08);
+  --code-bg: rgba(255, 255, 255, 0.1);
+  --pre-bg: #1e1e1e;
+  --pre-color: #d4d4d4;
+}

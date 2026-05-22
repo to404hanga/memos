@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 marked.setOptions({
   breaks: true,
@@ -24,7 +25,11 @@ interface MarkdownViewProps {
 export default function MarkdownView({ content, className }: MarkdownViewProps): React.ReactElement {
   const html = useMemo(() => {
     if (!content) return '';
-    return marked.parse(content) as string;
+    const raw = marked.parse(content) as string;
+    return DOMPurify.sanitize(raw, {
+      ADD_TAGS: ['img'],
+      ADD_ATTR: ['src', 'alt', 'title', 'style'],
+    });
   }, [content]);
 
   return (
