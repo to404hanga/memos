@@ -41,14 +41,37 @@
 # 安装依赖
 npm install
 
-# 直接运行（加载构建产物）
-npx webpack build --mode production && npx electron .
+# 构建主进程 + 渲染进程，然后运行
+npm run build:main && npx webpack build --mode production && npx electron .
 
-# 开发模式（热更新）
+# 开发模式（前端热更新）
 npm run dev
+# 修改主进程代码后需要手动重新构建：
+npm run build:main
 
 # 注册 CLI 全局命令
 npm link
+```
+
+## 项目结构
+
+```
+src/
+├── main/               # Electron 主进程（TypeScript）
+│   ├── index.ts        # 入口：窗口/托盘/生命周期
+│   ├── database/       # SQLite 数据库初始化和 CRUD
+│   ├── scheduler/      # 提醒调度（含中国假日判断）
+│   ├── ai/             # AI 多模型调用引擎
+│   ├── ipc/            # IPC handler
+│   ├── api-server/     # CLI HTTP API
+│   └── webhook/        # 企微 Webhook 推送
+├── hooks/              # React 自定义 Hooks
+│   ├── useTheme.ts     # 主题管理
+│   └── useMemos.ts     # 备忘录状态管理
+├── components/         # React 组件
+├── styles/             # CSS 变量
+├── App.tsx             # 主应用组件
+└── index.tsx           # React 入口
 ```
 
 ## CLI 使用

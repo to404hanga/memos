@@ -222,14 +222,26 @@ const dbOps = {
 };
 
 // ===== HTTP 请求（GUI 模式） =====
+function getCliToken() {
+  const tokenPath = path.join(
+    process.env.HOME || process.env.USERPROFILE,
+    'Library', 'Application Support', '备忘录', '.cli-token'
+  );
+  try { return fs.readFileSync(tokenPath, 'utf-8').trim(); } catch { return ''; }
+}
+
 function httpRequest(method, urlPath, body) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlPath, `http://127.0.0.1:${CLI_PORT}/api`);
     const payload = body ? JSON.stringify(body) : '';
+    const token = getCliToken();
     const options = {
       hostname: '127.0.0.1', port: CLI_PORT,
       path: url.pathname + url.search, method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
       timeout: 3000,
     };
     const req = http.request(options, (res) => {

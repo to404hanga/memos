@@ -7,7 +7,7 @@ import { BrowserWindow } from 'electron';
 
 const CLI_PORT = 19527;
 
-export function startCliServer(mainWindow: BrowserWindow | null): void {
+export function startCliServer(mainWindow: BrowserWindow | null, token?: string): void {
   const routes: Record<string, (body?: any, query?: any) => any> = {
     'GET /api/memos': () => getAllMemos(),
     'GET /api/trash': () => getTrashMemos(),
@@ -118,6 +118,17 @@ export function startCliServer(mainWindow: BrowserWindow | null): void {
     if (routeKey === 'GET /api/ping') {
       res.end(JSON.stringify({ ok: true }));
       return;
+    }
+
+    // Token 校验
+    if (token) {
+      const authHeader = req.headers['authorization'] || '';
+      const reqToken = authHeader.replace(/^Bearer\s+/i, '') || url.searchParams.get('token') || '';
+      if (reqToken !== token) {
+        res.statusCode = 401;
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
     }
 
     const handler = routes[routeKey];

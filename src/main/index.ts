@@ -1,6 +1,8 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, protocol, net } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
+import * as crypto from 'crypto';
 import { initDatabase, closeDatabase } from './database';
 import { cleanupOldTrash, cleanupOldConversations } from './database/memo.repo';
 import { registerAllIpc } from './ipc';
@@ -13,10 +15,19 @@ app.name = '备忘录';
 const userDataPath = path.join(os.homedir(), 'Library', 'Application Support', '备忘录');
 app.setPath('userData', userDataPath);
 
+// 生成 CLI API Token（每次启动随机生成，写入文件供 CLI 读取）
+const cliToken = crypto.randomBytes(16).toString('hex');
+const tokenPath = path.join(userDataPath, '.cli-token');
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
 const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.png');
+
+// 注册自定义 protocol 处理本地文件访问
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'local-file', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true } },
+]);
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -33,7 +44,6 @@ function createWindow(): void {
       preload: path.join(__dirname, '..', '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false,
     },
   });
 
@@ -65,6 +75,15 @@ function createTray(): void {
 }
 
 app.whenReady().then(async () => {
+  // 注册 local-file:// 协议处理本地文件（图片等）
+  protocol.handle('local-file', (request) => {
+    const filePath = decodeURIComponent(request.url.replace('local-file://', ''));
+    return net.fetch('file://' + filePath);
+  });
+
+  // 写入 CLI token
+  fs.writeFileSync(tokenPath, cliToken, { mode: 0o600 });
+
   if (process.platform === 'darwin') {
     app.dock.setIcon(iconPath);
     app.setName('备忘录');
@@ -79,7 +98,7 @@ app.whenReady().then(async () => {
 
   registerAllIpc(mainWindow);
   loadAllReminders(mainWindow);
-  startCliServer(mainWindow);
+  startCliServer(mainWindow, cliToken);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
