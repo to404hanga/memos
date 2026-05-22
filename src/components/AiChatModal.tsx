@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import AiPreviewCard, { aiArgsToMemo } from './AiPreviewCard';
 import AiProviderSettings from './AiProviderSettings';
 import MarkdownView from './MarkdownView';
-import type { AiCreateMemoArgs, AiMessage, AiModel, AiProvider, AiToolCall, MemoFormData } from '../../types/global';
+import type { AiConversationMeta, AiCreateMemoArgs, AiMessage, AiModel, AiProvider, AiToolCall, MemoFormData } from '../../types/global';
 
 interface Props {
   onClose: () => void;
@@ -48,8 +48,76 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
     return (localStorage.getItem('ai-model-choice') as ModelChoice) || 'auto';
   });
   const [showModelMenu, setShowModelMenu] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [conversations, setConversations] = useState<AiConversationMeta[]>([]);
+  const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 生成新对话 ID
+  const newConvId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+  // 加载历史列表
+  const loadConversations = async () => {
+    const list = await window.api.aiGetConversations();
+    setConversations(list);
+  };
+
+  // 保存当前对话到 DB
+  const saveCurrentConversation = async (msgs: DisplayMessage[], convId: string | null) => {
+    if (!msgs.length) return;
+    const id = convId || newConvId();
+    // 标题取第一条用户消息前 20 字
+    const firstUser = msgs.find((m) => m.role === 'user');
+    const title = firstUser ? firstUser.content.slice(0, 20) : '新对话';
+    // 只保存 role/content/toolCalls/thinking/modelLabel/fallbackFrom/ts（精简）
+    const toSave = msgs.map((m) => ({
+      role: m.role,
+      content: m.content,
+      toolCalls: m.toolCalls,
+      thinking: m.thinking,
+      modelLabel: m.modelLabel,
+      fallbackFrom: m.fallbackFrom,
+      ts: m.ts,
+    }));
+    await window.api.aiSaveConversation({ id, title, messages: toSave as AiMessage[] });
+    if (!convId) setCurrentConvId(id);
+    return id;
+  };
+
+  // 切换到历史对话
+  const switchConversation = async (id: string) => {
+    // 先保存当前（如果有内容）
+    if (messages.length > 0 && currentConvId) {
+      await saveCurrentConversation(messages, currentConvId);
+    }
+    const conv = await window.api.aiGetConversation(id);
+    if (conv) {
+      setMessages(conv.messages as DisplayMessage[]);
+      setCurrentConvId(id);
+    }
+    setShowHistory(false);
+  };
+
+  // 新对话
+  const startNewConversation = async () => {
+    if (messages.length > 0 && currentConvId) {
+      await saveCurrentConversation(messages, currentConvId);
+    }
+    setMessages([]);
+    setCurrentConvId(null);
+    setShowHistory(false);
+  };
+
+  // 删除对话
+  const deleteConversation = async (id: string) => {
+    await window.api.aiDeleteConversation(id);
+    if (currentConvId === id) {
+      setMessages([]);
+      setCurrentConvId(null);
+    }
+    await loadConversations();
+  };
 
   // textarea 自适应高度
   useEffect(() => {
@@ -67,6 +135,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
     const [ps, ms] = await Promise.all([window.api.aiGetProviders(), window.api.aiGetModels()]);
     setProviders(ps);
     setModels(ms);
+    await loadConversations();
 
     // 已选模型若被删/禁用，回退到 auto
     if (modelChoice !== 'auto') {
@@ -248,6 +317,13 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
           });
           activeStreamId.current = null;
           setSending(false);
+          // 自动保存对话
+          setMessages((latest) => {
+            const id = currentConvId || newConvId();
+            setCurrentConvId(id);
+            saveCurrentConversation(latest, id).then(loadConversations);
+            return latest;
+          });
         } else if (chunk.type === 'error') {
           setMessages((prev) => {
             const updated = [...prev];
@@ -313,7 +389,8 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
         <div className="ai-chat-header">
           <h2>💬 AI 助手</h2>
           <div className="ai-chat-header-right">
-            <button className="ai-icon-btn" onClick={() => { setMessages([]); }} title="新对话">＋</button>
+            <button className="ai-icon-btn" onClick={startNewConversation} title="新对话">＋</button>
+            <button className="ai-icon-btn" onClick={() => { setShowHistory((v) => !v); loadConversations(); }} title="历史对话">🕓</button>
             <button className="ai-icon-btn" onClick={() => setShowSettings(true)} title="Provider 配置">⚙️</button>
             <button className="ai-icon-btn" onClick={onClose} title="收起侧边栏">✕</button>
           </div>
@@ -323,6 +400,45 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
           <div className="ai-chat-warning">
             <span>{warning}</span>
             <button className="ai-link-btn" onClick={() => setShowSettings(true)}>打开设置</button>
+          </div>
+        )}
+
+        {showHistory && (
+          <div className="ai-history-panel">
+            <div className="ai-history-header">
+              <span>对话历史</span>
+              {conversations.length > 0 && (
+                <button className="ai-history-clear" onClick={async () => {
+                  if (!confirm('确认清空所有对话历史？')) return;
+                  await window.api.aiClearConversations();
+                  setMessages([]);
+                  setCurrentConvId(null);
+                  await loadConversations();
+                }}>清空全部</button>
+              )}
+            </div>
+            <div className="ai-history-list">
+              {conversations.length === 0 && (
+                <div className="ai-history-empty">暂无历史对话</div>
+              )}
+              {conversations.map((c) => (
+                <div
+                  key={c.id}
+                  className={`ai-history-item ${c.id === currentConvId ? 'active' : ''}`}
+                  onClick={() => switchConversation(c.id)}
+                >
+                  <div className="ai-history-item-title">{c.title || '新对话'}</div>
+                  <div className="ai-history-item-time">
+                    {new Date(c.updatedAt).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <button
+                    className="ai-history-item-del"
+                    onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
+                    title="删除"
+                  >✕</button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

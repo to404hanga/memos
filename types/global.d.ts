@@ -157,6 +157,17 @@ export interface AiChatResult {
   error?: string;
 }
 
+export interface AiConversationMeta {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiConversation extends AiConversationMeta {
+  messages: AiMessage[];
+}
+
 export interface AiTestResult {
   success: boolean;
   latencyMs?: number;
@@ -205,6 +216,12 @@ export interface ElectronAPI {
   aiChat: (args: AiChatArgs | AiMessage[]) => Promise<AiChatResult>;
   aiChatStream: (args: AiChatArgs, onChunk: (chunk: AiStreamChunk) => void) => string;
   aiChatStreamOff: (streamId: string) => void;
+  // AI Conversations
+  aiGetConversations: () => Promise<AiConversationMeta[]>;
+  aiGetConversation: (id: string) => Promise<AiConversation | null>;
+  aiSaveConversation: (conv: { id: string; title?: string; messages: AiMessage[] }) => Promise<boolean>;
+  aiDeleteConversation: (id: string) => Promise<boolean>;
+  aiClearConversations: () => Promise<boolean>;
   onReminder: (callback: (data: ReminderData) => void) => void;
   onMemosChanged: (callback: () => void) => void;
 }

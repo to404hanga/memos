@@ -143,6 +143,20 @@ async function initDatabase() {
     db.run('CREATE INDEX IF NOT EXISTS idx_ai_models_provider ON ai_models(provider_id)');
   } catch (e) {}
 
+  // 对话历史表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      messages TEXT NOT NULL
+    )
+  `);
+  try {
+    db.run('CREATE INDEX IF NOT EXISTS idx_ai_conversations_updated ON ai_conversations(updated_at)');
+  } catch (e) {}
+
   // 迁移旧数据：将单个 reminderTime/recurrence 转为 reminders 数组
   migrateOldReminders();
 
@@ -204,6 +218,12 @@ function getTrashMemos() {
 function cleanupOldTrash() {
   const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
   db.run('DELETE FROM memos WHERE deleted_at IS NOT NULL AND deleted_at < ?', [cutoff]);
+  saveDb();
+}
+
+function cleanupOldConversations() {
+  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
+  db.run('DELETE FROM ai_conversations WHERE updated_at < ?', [cutoff]);
   saveDb();
 }
 
@@ -2149,6 +2169,72 @@ ipcMain.handle('ai-chat', async (_, args) => {
   }
 });
 
+// ===== AI 对话历史 =====
+ipcMain.handle('ai-get-conversations', () => {
+  const stmt = db.prepare('SELECT id, title, created_at, updated_at FROM ai_conversations ORDER BY updated_at DESC');
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+});
+
+ipcMain.handle('ai-get-conversation', (_, id) => {
+  const stmt = db.prepare('SELECT * FROM ai_conversations WHERE id = ?');
+  stmt.bind([id]);
+  if (stmt.step()) {
+    const r = stmt.getAsObject();
+    stmt.free();
+    return {
+      id: r.id,
+      title: r.title,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      messages: JSON.parse(r.messages || '[]'),
+    };
+  }
+  stmt.free();
+  return null;
+});
+
+ipcMain.handle('ai-save-conversation', (_, conv) => {
+  const now = new Date().toISOString();
+  const existing = db.prepare('SELECT id FROM ai_conversations WHERE id = ?');
+  existing.bind([conv.id]);
+  const found = existing.step();
+  existing.free();
+
+  if (found) {
+    db.run(
+      'UPDATE ai_conversations SET title = ?, updated_at = ?, messages = ? WHERE id = ?',
+      [conv.title || null, now, JSON.stringify(conv.messages || []), conv.id]
+    );
+  } else {
+    db.run(
+      'INSERT INTO ai_conversations (id, title, created_at, updated_at, messages) VALUES (?, ?, ?, ?, ?)',
+      [conv.id, conv.title || null, now, now, JSON.stringify(conv.messages || [])]
+    );
+  }
+  saveDb();
+  return true;
+});
+
+ipcMain.handle('ai-delete-conversation', (_, id) => {
+  db.run('DELETE FROM ai_conversations WHERE id = ?', [id]);
+  saveDb();
+  return true;
+});
+
+ipcMain.handle('ai-clear-conversations', () => {
+  db.run('DELETE FROM ai_conversations');
+  saveDb();
+  return true;
+});
+
 // ===== 导入/导出 =====
 ipcMain.handle('export-data', async () => {
   const dateSuffix = new Date().toISOString().slice(0, 10);
@@ -2488,6 +2574,7 @@ app.whenReady().then(async () => {
 
   await initDatabase();
   cleanupOldTrash();
+  cleanupOldConversations();
 
   createWindow();
   createTray();

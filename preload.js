@@ -56,6 +56,12 @@ contextBridge.exposeInMainWorld('api', {
     // 用于清理（组件卸载时）
     ipcRenderer.removeAllListeners('ai-chat-chunk');
   },
+  // AI Conversations
+  aiGetConversations: () => ipcRenderer.invoke('ai-get-conversations'),
+  aiGetConversation: (id) => ipcRenderer.invoke('ai-get-conversation', id),
+  aiSaveConversation: (conv) => ipcRenderer.invoke('ai-save-conversation', conv),
+  aiDeleteConversation: (id) => ipcRenderer.invoke('ai-delete-conversation', id),
+  aiClearConversations: () => ipcRenderer.invoke('ai-clear-conversations'),
   onReminder: (callback) => {
     ipcRenderer.on('reminder-triggered', (_, data) => callback(data));
   },

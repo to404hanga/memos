@@ -2542,6 +2542,115 @@ input, textarea, button {
   flex-shrink: 0;
 }
 
+/* ----- 对话历史面板 ----- */
+.ai-history-panel {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  max-height: 280px;
+  overflow-y: auto;
+  animation: ai-sidebar-in 0.15s ease-out;
+}
+
+.ai-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 1;
+}
+
+.ai-history-clear {
+  border: none;
+  background: transparent;
+  color: #ff3b30;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.ai-history-clear:hover {
+  background: rgba(255, 59, 48, 0.1);
+}
+
+.ai-history-list {
+  padding: 0 8px 8px;
+}
+
+.ai-history-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.ai-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.ai-history-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.ai-history-item.active {
+  background: rgba(0, 122, 255, 0.1);
+}
+
+[data-theme="dark"] .ai-history-item.active {
+  background: rgba(10, 132, 255, 0.15);
+}
+
+.ai-history-item-title {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.ai-history-item-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.ai-history-item-del {
+  display: none;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-history-item:hover .ai-history-item-del {
+  display: inline-flex;
+}
+
+.ai-history-item-del:hover {
+  background: rgba(255, 59, 48, 0.15);
+  color: #ff3b30;
+}
+
 .ai-chat-messages {
   flex: 1;
   overflow-y: auto;
