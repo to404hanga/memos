@@ -1,10 +1,33 @@
+/**
+ * AI Provider 配置面板组件
+ *
+ * 以模态框形式展示，提供完整的 AI 服务配置管理功能：
+ *
+ * 左侧面板 - Provider（供应商）管理：
+ * - 新增/编辑/删除 Provider
+ * - 支持三种类型：OpenAI 兼容 / Anthropic Claude / Ollama 本地
+ * - 每种类型预置默认 Base URL
+ *
+ * 右侧面板 - 模型管理：
+ * - 添加/编辑/删除/启用/禁用模型
+ * - 模型连接测试（发送简单请求验证配置正确性）
+ * - Ollama 支持一键获取本地已安装模型
+ * - 全局优先级拖拽排序（跨 Provider 排序，Auto 模式按此顺序降级）
+ * - 思考模式开关（reasoning/extended thinking）
+ * - 最大上下文长度限制
+ *
+ * 底部 - 自定义系统提示词模板编辑器：
+ * - 支持变量替换：{{NOW}} {{NOW_ISO}} {{TIMEZONE}} {{TAGS}}
+ */
 import React, { useEffect, useState } from 'react';
 import type { AiProvider, AiProviderInput, AiProviderType, AiModel, AiTestResult } from '../../types/global';
 
 interface Props {
+  /** 关闭设置面板回调（关闭后会触发父组件刷新模型状态） */
   onClose: () => void;
 }
 
+/** 各 Provider 类型的预设配置 */
 const PROVIDER_PRESETS: Record<AiProviderType, { baseUrl: string; hint: string }> = {
   openai: {
     baseUrl: 'https://api.deepseek.com/v1',

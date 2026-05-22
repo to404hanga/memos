@@ -1,9 +1,36 @@
+/**
+ * 备忘录表单组件
+ *
+ * 用于创建和编辑备忘录的完整表单，以模态框形式展示。
+ * 功能模块：
+ *
+ * 1. 标题输入（必填）
+ * 2. 标签选择器：显示已有标签（可多选），支持新建标签
+ * 3. Markdown 编辑器：
+ *    - 三种模式：分栏（编辑+预览）/ 纯编辑 / 纯预览
+ *    - 工具栏：粗体/斜体/标题/删除线/代码/分割线/列表/引用/链接
+ *    - 插入图片（文件选择器或拖拽）
+ *    - 编辑器与预览区同步滚动
+ *    - 拖拽支持：图片文件自动插入 Markdown，其他文件添加为附件
+ * 4. 多提醒配置：
+ *    - 支持单次/每天/工作日/每周/每月
+ *    - 每种周期可设置具体时间
+ *    - 支持添加多个不同类型的提醒
+ * 5. 静默期：在指定日期范围内暂停提醒
+ * 6. 附件管理：添加/查看/打开/移除附件
+ * 7. 企微 Webhook：
+ *    - 启用/禁用开关
+ *    - URL 和消息模板配置
+ *    - 发送测试功能
+ */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MarkdownView from './MarkdownView';
 import type { Memo, MemoFormData, Recurrence, Tag, MutePeriod, Attachment, WebhookConfig } from '../../types/global';
 
+/** 星期名称数组 */
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
+/** 根据文件扩展名返回对应的 emoji 图标 */
 function getFileIcon(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || '';
   const iconMap: Record<string, string> = {
@@ -17,18 +44,24 @@ function getFileIcon(name: string): string {
   return iconMap[ext] || '📎';
 }
 
+/** 将字节数格式化为人类可读的文件大小（B/KB/MB） */
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** 提醒类型 */
 type RecurrenceType = 'once' | 'daily' | 'workday' | 'weekly' | 'monthly';
+/** 编辑器显示模式 */
 type EditorMode = 'split' | 'edit' | 'preview';
 
 interface MemoFormProps {
+  /** 编辑时传入已有备忘录数据，新建时为 null */
   memo: Memo | null;
+  /** 提交回调（创建或更新） */
   onSubmit: (data: MemoFormData) => void;
+  /** 取消回调（关闭表单） */
   onCancel: () => void;
 }
 

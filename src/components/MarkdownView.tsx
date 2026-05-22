@@ -1,3 +1,17 @@
+/**
+ * Markdown 渲染组件
+ *
+ * 将 Markdown 文本安全地渲染为 HTML：
+ * - 使用 marked 库解析 Markdown（支持 GFM 和软换行）
+ * - 使用 DOMPurify 进行 XSS 防护清洗
+ * - 自定义图片渲染器：自动为本地路径添加 file:// 协议前缀
+ * - 通过 useMemo 缓存渲染结果，避免不必要的重新解析
+ *
+ * 在以下场景中使用：
+ * - MemoForm 预览面板
+ * - MemoItem 展开详情
+ * - AiChatModal AI 回复内容渲染
+ */
 import React, { useMemo } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';

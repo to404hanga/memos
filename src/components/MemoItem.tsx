@@ -1,7 +1,25 @@
+/**
+ * 单个备忘录项组件
+ *
+ * 在列表视图中展示一条备忘录的完整信息，功能包括：
+ * - 完成状态切换（复选框）
+ * - 标题展示（置顶图标 + 标签徽章）
+ * - 内容预览（纯文本摘要 / Markdown 展开）
+ * - 提醒时间显示及状态标签（已过期/即将/待提醒/已完成）
+ * - 操作按钮：置顶、编辑、删除（含二次确认）
+ * - 富文本内容支持展开/收起详情（Markdown 渲染）
+ *
+ * 提醒状态判断逻辑：
+ * - expired: 提醒时间已过且未完成
+ * - soon: 距提醒时间不到 1 小时
+ * - pending: 正常等待中
+ * - completed: 已完成
+ */
 import React, { useState } from 'react';
 import MarkdownView from './MarkdownView';
 import type { Memo } from '../../types/global';
 
+/** 提醒状态枚举 */
 type ReminderStatus = 'expired' | 'soon' | 'pending' | 'completed';
 
 interface MemoItemProps {

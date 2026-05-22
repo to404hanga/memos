@@ -1,6 +1,19 @@
+/**
+ * 备忘录数据管理 Hook
+ *
+ * 封装所有备忘录相关的状态管理和数据操作，包括：
+ * - 数据加载：初始加载 + 60秒定时刷新 + 外部变更通知刷新
+ * - 搜索：300ms 防抖的关键词搜索
+ * - 筛选：按完成状态（全部/待办/已完成）和标签筛选
+ * - CRUD：创建、更新、删除、切换完成/置顶状态
+ * - 回收站：软删除、恢复、永久删除、清空
+ * - 导入导出：ZIP 格式的数据备份与恢复
+ * - 标签联动：AI 创建备忘录时自动创建不存在的标签
+ */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Memo, MemoFormData, Tag } from '../../types/global';
 
+/** 列表视图的筛选类型 */
 type FilterType = 'all' | 'active' | 'completed';
 
 export function useMemos() {

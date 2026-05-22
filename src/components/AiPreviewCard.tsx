@@ -1,13 +1,29 @@
+/**
+ * AI 创建备忘录预览卡片组件
+ *
+ * 当 AI 通过 create_memo 工具调用请求创建备忘录时，
+ * 该组件以卡片形式展示待创建备忘录的详细信息：
+ * - 标题、内容、提醒时间、周期配置、标签、静默期
+ * - 支持两种操作：直接确认创建 / 进入表单编辑
+ * - 显示创建状态：待确认(pending) / 已创建(created) / 编辑中(editing)
+ *
+ * 同时导出 aiArgsToMemo 工具函数，用于将 AI 工具调用参数转换为表单数据。
+ */
 import React from 'react';
 import type { AiCreateMemoArgs, MemoFormData } from '../../types/global';
 
 interface Props {
+  /** AI create_memo 工具的参数 */
   args: AiCreateMemoArgs;
+  /** 当前操作状态 */
   status: 'pending' | 'created' | 'editing';
+  /** 确认创建回调 */
   onConfirm: () => void;
+  /** 跳转编辑回调 */
   onEdit: () => void;
 }
 
+/** 格式化 ISO 时间字符串为中文本地化格式 */
 function formatTime(iso?: string): string {
   if (!iso) return '';
   try {
@@ -16,6 +32,7 @@ function formatTime(iso?: string): string {
   } catch { return iso; }
 }
 
+/** 将周期提醒配置转换为人类可读的中文描述 */
 function describeRecurrence(rec?: AiCreateMemoArgs['recurrence']): string {
   if (!rec) return '';
   const h = String(rec.hour ?? 0).padStart(2, '0');
@@ -33,6 +50,12 @@ function describeRecurrence(rec?: AiCreateMemoArgs['recurrence']): string {
   }
 }
 
+/**
+ * 将 AI create_memo 工具参数转换为 MemoFormData
+ *
+ * 负责参数格式适配：将 AI 返回的扁平结构转换为表单组件所需的嵌套结构，
+ * 特别是将 recurrence/reminderTime 统一转换为 reminders 数组格式。
+ */
 export function aiArgsToMemo(args: AiCreateMemoArgs): MemoFormData {
   const reminders: any[] = [];
   if (args.recurrence && args.recurrence.type !== 'once') {

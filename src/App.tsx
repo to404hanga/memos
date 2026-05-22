@@ -1,3 +1,16 @@
+/**
+ * 主应用组件
+ *
+ * 整个备忘录应用的顶层组件，负责：
+ * 1. 视图切换：列表 / 时间轴 / 日历 / 看板 / 回收站
+ * 2. 搜索功能：关键词模糊搜索备忘录
+ * 3. 标签筛选：按标签过滤备忘录
+ * 4. 主题切换：浅色 / 深色 / 跟随系统
+ * 5. AI 侧边栏：打开/关闭 AI 助手
+ * 6. 表单弹窗：新建/编辑备忘录
+ * 7. 提醒弹窗：接收主进程推送的到时提醒
+ * 8. 数据导入导出
+ */
 import React, { useState, useRef } from 'react';
 import MemoForm from './components/MemoForm';
 import MemoList from './components/MemoList';
@@ -9,6 +22,7 @@ import { useTheme } from './hooks/useTheme';
 import { useMemos } from './hooks/useMemos';
 import type { Memo, MemoFormData, ReminderData } from '../types/global';
 
+/** 应用支持的视图类型 */
 type ViewType = 'list' | 'timeline' | 'calendar' | 'kanban' | 'trash';
 
 export default function App(): React.ReactElement {

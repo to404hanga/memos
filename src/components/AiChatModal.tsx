@@ -1,38 +1,75 @@
+/**
+ * AI 聊天侧边栏组件
+ *
+ * 应用的核心 AI 交互界面，以侧边栏形式展示，功能包括：
+ * - 流式对话：实时展示 AI 的思考过程和回复内容
+ * - 多轮工具调用：AI 可执行服务端工具（查询/创建/修改/删除备忘录），展示执行步骤
+ * - 模型选择：支持 Auto 模式（按优先级降级）或手动指定模型
+ * - 上下文环形指示器：实时显示对话上下文使用量占比
+ * - 对话历史管理：新建/切换/删除/清空对话
+ * - 中断响应：允许用户中途打断 AI 回复
+ * - 预览卡片：AI 创建备忘录时展示预览，用户确认后执行
+ * - Provider 设置入口：快捷进入 AI 配置面板
+ */
 import React, { useEffect, useRef, useState } from 'react';
 import AiPreviewCard, { aiArgsToMemo } from './AiPreviewCard';
 import AiProviderSettings from './AiProviderSettings';
 import MarkdownView from './MarkdownView';
 import type { AiConversationMeta, AiCreateMemoArgs, AiMessage, AiModel, AiProvider, AiToolCall, MemoFormData } from '../../types/global';
 
+/** 组件属性 */
 interface Props {
+  /** 关闭侧边栏回调 */
   onClose: () => void;
+  /** 确认创建备忘录回调（用户点击预览卡片的"创建"按钮） */
   onConfirmCreate: (memo: MemoFormData) => Promise<void> | void;
+  /** 编辑草稿回调（用户点击预览卡片的"修改"按钮，跳转到表单编辑） */
   onEditDraft: (memo: MemoFormData) => void;
 }
 
+/** 服务端工具执行步骤 */
 interface ToolStep {
+  /** 工具名称 */
   name: string;
+  /** 工具中文标签（如"查询备忘录"） */
   label: string;
+  /** 执行状态 */
   status: 'running' | 'done' | 'error';
+  /** 执行摘要（如"找到 5 条"） */
   summary?: string;
 }
 
+/**
+ * 渲染块类型
+ * 用于按时间顺序交错展示"思考过程"和"工具调用步骤"
+ */
 type RenderBlock =
   | { type: 'thinking'; segmentIdx: number }
   | { type: 'tool_step'; stepIdx: number };
 
+/**
+ * 扩展的消息类型（仅前端展示用）
+ * 在 AiMessage 基础上增加了流式状态、工具执行状态等 UI 相关字段
+ */
 interface DisplayMessage extends AiMessage {
+  /** 各 create_memo 工具调用的操作状态 */
   toolStatus?: Record<string, 'pending' | 'created' | 'editing'>;
+  /** 是否正在流式接收中 */
   streaming?: boolean;
+  /** 服务端工具执行提示文本（已弃用） */
   serverToolHint?: string;
+  /** 服务端工具执行步骤列表 */
   toolSteps?: ToolStep[];
+  /** 多段思考内容数组（多轮工具调用时会产生多段思考） */
   thinkingSegments?: string[];
+  /** 当前写入的思考段索引 */
   currentSegmentIdx?: number;
-  renderSequence?: RenderBlock[]; // 按时间顺序记录块
+  /** 按时间顺序记录的渲染块序列（思考和工具步骤交错排列） */
+  renderSequence?: RenderBlock[];
 }
 
-// "auto" 表示 Auto 模式（按全局优先级降级）
-type ModelChoice = 'auto' | string; // string = modelId
+/** 模型选择：'auto' 表示自动降级模式，string 为具体 modelId */
+type ModelChoice = 'auto' | string;
 
 export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Props): React.ReactElement {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
