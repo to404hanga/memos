@@ -184,9 +184,23 @@ export default function App(): React.ReactElement {
   const filteredMemos = memos.filter((m) => {
     if (filter === 'active' && m.completed) return false;
     if (filter === 'completed' && !m.completed) return false;
-    if (filterTag && (!m.tags || !m.tags.includes(filterTag))) return false;
+    if (filterTag === '__none__' && m.tags && m.tags.length > 0) return false;
+    if (filterTag && filterTag !== '__none__' && (!m.tags || !m.tags.includes(filterTag))) return false;
     return true;
   });
+
+  // 仅按标签过滤（供 timeline/calendar/kanban 使用）
+  const tagFilteredMemos = !filterTag
+    ? memos
+    : filterTag === '__none__'
+      ? memos.filter((m) => !m.tags || m.tags.length === 0)
+      : memos.filter((m) => m.tags && m.tags.includes(filterTag));
+
+  const tagFilteredTrash = !filterTag
+    ? trashMemos
+    : filterTag === '__none__'
+      ? trashMemos.filter((m) => !m.tags || m.tags.length === 0)
+      : trashMemos.filter((m) => m.tags && m.tags.includes(filterTag));
 
   const activeCount = memos.filter((m) => !m.completed).length;
 
@@ -288,6 +302,12 @@ export default function App(): React.ReactElement {
             >
               全部标签
             </button>
+            <button
+              className={`tag-filter-btn ${filterTag === '__none__' ? 'active' : ''}`}
+              onClick={() => setFilterTag(filterTag === '__none__' ? null : '__none__')}
+            >
+              无标签
+            </button>
             {allTags.map((tag) => (
               <button
                 key={tag.id}
@@ -348,33 +368,33 @@ export default function App(): React.ReactElement {
         </>
       ) : view === 'timeline' ? (
         <Timeline
-          memos={memos}
+          memos={tagFilteredMemos}
           onToggle={handleToggle}
           onEdit={handleEdit}
         />
       ) : view === 'calendar' ? (
         <CalendarView
-          memos={memos}
+          memos={tagFilteredMemos}
           onEdit={handleEdit}
           onToggle={handleToggle}
         />
       ) : view === 'kanban' ? (
         <KanbanView
-          memos={memos}
+          memos={tagFilteredMemos}
           onEdit={handleEdit}
           onToggle={handleToggle}
           onPin={handlePin}
         />
       ) : (
         <div className="trash-view">
-          {trashMemos.length > 0 && (
+          {tagFilteredTrash.length > 0 && (
             <div className="trash-header">
-              <span className="trash-info">{trashMemos.length} 项已删除（30 天后自动清理）</span>
+              <span className="trash-info">{tagFilteredTrash.length} 项已删除（30 天后自动清理）</span>
               <button className="trash-empty-btn" onClick={handleEmptyTrash}>清空回收站</button>
             </div>
           )}
           <div className="memo-list">
-            {trashMemos.map((memo) => (
+            {tagFilteredTrash.map((memo) => (
               <div key={memo.id} className="memo-item trash-item">
                 <div className="memo-main">
                   <div className="memo-content">
@@ -398,7 +418,7 @@ export default function App(): React.ReactElement {
               </div>
             ))}
           </div>
-          {trashMemos.length === 0 && (
+          {tagFilteredTrash.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon">🗑️</div>
               <p>回收站为空</p>
