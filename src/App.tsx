@@ -66,6 +66,11 @@ export default function App(): React.ReactElement {
       loadMemos();
     });
 
+    window.api.onMemosChanged(() => {
+      loadMemos();
+      window.api.getTags().then(setAllTags);
+    });
+
     return () => clearInterval(interval);
   }, [loadMemos]);
 

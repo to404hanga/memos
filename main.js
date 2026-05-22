@@ -827,7 +827,7 @@ function updateModelRuntime(id, fields) {
 // 客户端工具（不立即执行，由 UI 渲染卡片由用户确认）
 const CLIENT_TOOLS = new Set(['create_memo']);
 // 服务端工具（立即执行并把结果回灌给 LLM）
-const SERVER_TOOLS = new Set(['list_memos']);
+const SERVER_TOOLS = new Set(['list_memos', 'complete_memo', 'delete_memo']);
 
 const AI_TOOLS_OPENAI = [
   {
@@ -874,6 +874,35 @@ const AI_TOOLS_OPENAI = [
             description: '过滤状态：all=全部, active=未完成（默认）, completed=已完成',
           },
         },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'complete_memo',
+      description: '标记一条备忘录为已完成（或取消完成）。接受标题的模糊关键词或精确 ID。如果匹配到多条，返回候选列表让用户确认。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '备忘录的标题关键词或 ID' },
+          undo: { type: 'boolean', description: '设为 true 则取消完成（恢复为未完成），默认 false' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_memo',
+      description: '删除一条备忘录（移入回收站，30天后自动清理）。接受标题的模糊关键词或精确 ID。如果匹配到多条，返回候选列表让用户确认。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '备忘录的标题关键词或 ID' },
+        },
+        required: ['query'],
       },
     },
   },
@@ -941,6 +970,88 @@ function executeServerTool(name, args) {
     return { count: items.length, items };
   }
 
+  if (name === 'complete_memo') {
+    const query = (args && args.query || '').trim();
+    const undo = args && args.undo;
+    if (!query) return { error: '缺少 query 参数' };
+
+    // 先尝试精确 ID 匹配
+    const byId = getMemoById(query);
+    if (byId) {
+      const newState = undo ? false : true;
+      if (byId.completed === newState) {
+        return { success: true, message: `「${byId.title}」已经是${newState ? '已完成' : '未完成'}状态` };
+      }
+      byId.completed = newState;
+      updateMemoInDb(byId);
+      if (newState) clearMemoTimers(byId.id);
+      else scheduleReminder(byId);
+      return { success: true, message: `已将「${byId.title}」标记为${newState ? '已完成 ✅' : '未完成'}` };
+    }
+
+    // 模糊匹配标题
+    const all = getAllMemos();
+    const keyword = query.toLowerCase();
+    const matches = all.filter((m) => (m.title || '').toLowerCase().includes(keyword));
+
+    if (matches.length === 0) {
+      return { error: `未找到包含「${query}」的备忘录` };
+    }
+    if (matches.length === 1) {
+      const target = matches[0];
+      const newState = undo ? false : true;
+      if (target.completed === newState) {
+        return { success: true, message: `「${target.title}」已经是${newState ? '已完成' : '未完成'}状态` };
+      }
+      target.completed = newState;
+      updateMemoInDb(target);
+      if (newState) clearMemoTimers(target.id);
+      else scheduleReminder(target);
+      return { success: true, message: `已将「${target.title}」标记为${newState ? '已完成 ✅' : '未完成'}` };
+    }
+    // 多条匹配，返回候选
+    return {
+      ambiguous: true,
+      message: `找到 ${matches.length} 条匹配，请用户确认具体是哪一条：`,
+      candidates: matches.slice(0, 10).map((m) => ({ id: m.id, title: m.title, completed: m.completed })),
+    };
+  }
+
+  if (name === 'delete_memo') {
+    const query = (args && args.query || '').trim();
+    if (!query) return { error: '缺少 query 参数' };
+
+    // 先尝试精确 ID 匹配
+    const byId = getMemoById(query);
+    if (byId) {
+      db.run('UPDATE memos SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), byId.id]);
+      saveDb();
+      clearMemoTimers(byId.id);
+      return { success: true, message: `已将「${byId.title}」移入回收站 🗑️` };
+    }
+
+    // 模糊匹配标题
+    const all = getAllMemos();
+    const keyword = query.toLowerCase();
+    const matches = all.filter((m) => (m.title || '').toLowerCase().includes(keyword));
+
+    if (matches.length === 0) {
+      return { error: `未找到包含「${query}」的备忘录` };
+    }
+    if (matches.length === 1) {
+      const target = matches[0];
+      db.run('UPDATE memos SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), target.id]);
+      saveDb();
+      clearMemoTimers(target.id);
+      return { success: true, message: `已将「${target.title}」移入回收站 🗑️` };
+    }
+    return {
+      ambiguous: true,
+      message: `找到 ${matches.length} 条匹配，请用户确认具体删除哪一条：`,
+      candidates: matches.slice(0, 10).map((m) => ({ id: m.id, title: m.title })),
+    };
+  }
+
   return { error: `未知工具: ${name}` };
 }
 
@@ -961,20 +1072,25 @@ function buildSystemPrompt() {
     '可用工具：',
     '- create_memo：创建新待办，仅生成预览卡片，需用户点击「✓ 创建」才落库',
     '- list_memos：查询用户已有的待办列表，可按 keyword/tag/status 过滤',
+    '- complete_memo：标记待办为已完成（或 undo 取消完成），按标题关键词或 ID 匹配',
+    '- delete_memo：删除待办（移入回收站），按标题关键词或 ID 匹配',
     '',
     '规则：',
     '1. 用户用自然语言描述新任务时，提取标题、提醒时间、标签等字段，调用 create_memo',
-    '2. 用户询问"我有什么待办 / 帮我看看任务 / 还有哪些没做完"等，先调用 list_memos 拿到数据再回复',
-    '3. 时间表达需转为具体时间（基于上方"当前时间"）：',
+    '2. 用户询问"我有什么待办 / 帮我看看任务"等，先调用 list_memos 拿到数据再回复',
+    '3. 用户说"把xx完成了 / xx已经做完了"，调用 complete_memo',
+    '4. 用户说"删掉xx / 把xx去掉"，调用 delete_memo',
+    '5. 如果 complete_memo 或 delete_memo 返回 ambiguous（多条匹配），将候选列表展示给用户，询问具体是哪一条',
+    '6. 时间表达需转为具体时间（基于上方"当前时间"）：',
     '   - "明天下午3点" → 当前日期+1，15:00',
     '   - "下周一上午9点" → 计算下周一的日期',
     '   - "每天早上 8 点" → recurrence: { type: daily, hour: 8, minute: 0 }',
-    '4. 缺关键信息时主动询问（如只说"提醒我"没有时间）',
-    '5. 如果用户提到的标签不在已有列表，可以建议新建',
-    '6. 调用 create_memo 仅生成"预览卡片"，不会直接写入数据库——必须由用户点击「✓ 创建」按钮才会真正落库。所以你可以放心调用工具，无需反复确认。',
-    '7. 用户表达修改意图（如"再加个标签"）时，重新调用 create_memo 输出新版本预览',
-    '8. 调用 list_memos 后，根据返回结果用自然语言总结给用户（如分组、按时间排序、突出重要项）',
-    '9. 回复使用中文，简洁友好',
+    '7. 缺关键信息时主动询问（如只说"提醒我"没有时间）',
+    '8. 如果用户提到的标签不在已有列表，可以建议新建',
+    '9. 调用 create_memo 仅生成"预览卡片"，不会直接写入数据库——必须由用户点击「✓ 创建」按钮才会真正落库。所以你可以放心调用工具，无需反复确认。',
+    '10. 用户表达修改意图（如"再加个标签"）时，重新调用 create_memo 输出新版本预览',
+    '11. 调用 list_memos 后，根据返回结果用自然语言总结给用户（如分组、按时间排序、突出重要项）',
+    '12. 回复使用中文，简洁友好',
   ].join('\n');
 }
 
@@ -1486,13 +1602,20 @@ async function runConversation(provider, model, initialMessages, onDelta) {
     // 通知前端：工具执行完毕（带摘要）
     if (onDelta) {
       toolResults.forEach(({ call, result }) => {
-        // 取摘要：count 或 error
         let summary = '';
         if (result && result.error) summary = `错误: ${result.error}`;
+        else if (result && result.ambiguous) summary = `${result.candidates?.length || 0} 条候选`;
         else if (result && typeof result.count === 'number') summary = `找到 ${result.count} 条结果`;
+        else if (result && result.success) summary = result.message || '执行完成';
         else summary = '执行完成';
         onDelta({ type: 'server_tool_done', name: call.name, summary, loop });
       });
+    }
+
+    // 如果有写操作（complete/delete），通知主窗口刷新列表
+    const hasMutation = serverCalls.some((tc) => tc.name === 'complete_memo' || tc.name === 'delete_memo');
+    if (hasMutation && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('memos-changed');
     }
   }
 

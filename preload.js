@@ -59,4 +59,7 @@ contextBridge.exposeInMainWorld('api', {
   onReminder: (callback) => {
     ipcRenderer.on('reminder-triggered', (_, data) => callback(data));
   },
+  onMemosChanged: (callback) => {
+    ipcRenderer.on('memos-changed', () => callback());
+  },
 });

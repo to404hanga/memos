@@ -206,6 +206,7 @@ export interface ElectronAPI {
   aiChatStream: (args: AiChatArgs, onChunk: (chunk: AiStreamChunk) => void) => string;
   aiChatStreamOff: (streamId: string) => void;
   onReminder: (callback: (data: ReminderData) => void) => void;
+  onMemosChanged: (callback: () => void) => void;
 }
 
 declare global {

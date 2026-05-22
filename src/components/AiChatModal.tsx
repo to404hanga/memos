@@ -171,6 +171,8 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
         } else if (chunk.type === 'server_tool') {
           const toolLabels: Record<string, string> = {
             list_memos: '查询备忘录',
+            complete_memo: '标记完成',
+            delete_memo: '删除备忘录',
           };
           const label = toolLabels[chunk.name || ''] || chunk.name || '工具调用';
           setMessages((prev) => {
