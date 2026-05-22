@@ -561,6 +561,25 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
                   <div className="ai-msg-meta">via {msg.modelLabel}</div>
                 )}
               </div>
+              {!msg.streaming && msg.content && (
+                <div className={`ai-msg-actions ${msg.role === 'user' ? 'align-right' : 'align-left'}`}>
+                  <button
+                    className="ai-msg-action-btn"
+                    title="复制"
+                    onClick={(e) => {
+                      const btn = e.currentTarget;
+                      const text = msg.content || '';
+                      navigator.clipboard.writeText(text).then(() => {
+                        btn.textContent = '✓';
+                        setTimeout(() => { btn.textContent = '📋'; }, 1500);
+                      }).catch(() => {
+                        btn.textContent = '✓';
+                        setTimeout(() => { btn.textContent = '📋'; }, 1500);
+                      });
+                    }}
+                  >📋</button>
+                </div>
+              )}
             </div>
           ))}
         </div>

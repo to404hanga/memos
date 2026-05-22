@@ -2712,20 +2712,59 @@ input, textarea, button {
 
 .ai-msg {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 14px;
 }
 
 .ai-msg-user {
-  justify-content: flex-end;
+  align-items: flex-end;
 }
 
 .ai-msg-bubble {
+  position: relative;
   max-width: 78%;
   padding: 10px 14px;
   border-radius: 12px;
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
+}
+
+.ai-msg-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ai-msg-actions.align-left {
+  justify-content: flex-start;
+}
+
+.ai-msg-actions.align-right {
+  justify-content: flex-end;
+}
+
+.ai-msg:hover .ai-msg-actions {
+  opacity: 1;
+}
+
+.ai-msg-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  transition: background 0.15s;
+}
+
+.ai-msg-action-btn:hover {
+  background: var(--tag-bg);
+  color: var(--text-primary);
 }
 
 .ai-msg-user .ai-msg-bubble {
