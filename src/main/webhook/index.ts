@@ -1,3 +1,18 @@
+/**
+ * 企业微信 Webhook 推送模块
+ *
+ * 当备忘录提醒触发时，如果该备忘录配置了 Webhook，
+ * 则向企业微信群机器人发送 Markdown 格式的通知消息。
+ *
+ * 功能：
+ * - replaceWebhookVars: 模板变量替换（{{title}}/{{content}}/{{tags}}/{{time}}/{{id}}）
+ * - sendWechatWebhook: 向企微 Webhook URL 发送 markdown_v2 格式消息
+ * - sendWebhook: 主入口，检查 Webhook 配置后发送
+ * - testWebhook: 测试发送功能（使用模拟数据验证 URL 是否可达）
+ *
+ * 消息格式使用企微的 markdown_v2 类型，支持标准 Markdown 语法。
+ * 超时设置为 5 秒，失败时仅记录日志不抛异常（不影响提醒弹窗）。
+ */
 import { Memo } from '../database/memo.repo';
 
 export function replaceWebhookVars(template: string, memo: any, time: string): string {

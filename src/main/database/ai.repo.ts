@@ -1,3 +1,24 @@
+/**
+ * AI Provider/Model 数据仓库
+ *
+ * 管理 AI 配置的持久化存储，包括：
+ *
+ * Provider 操作：
+ * - getAllProviders / getProviderById: 查询
+ * - saveProvider: 创建或更新（根据 id 是否存在自动判断）
+ * - deleteProvider: 删除 Provider 并级联删除其下所有模型
+ *
+ * Model 操作：
+ * - getAllModels / getModelById / getEnabledModelsOrdered: 查询
+ * - saveModel: 创建或更新（新建时自动分配最低优先级）
+ * - deleteModel: 删除并重排优先级
+ * - setModelEnabled: 启用/禁用切换
+ * - reorderModels: 批量更新全局优先级顺序（拖拽排序）
+ * - updateModelRuntime: 更新运行时状态（lastError/lastUsedAt）
+ *
+ * 工具函数：
+ * - isLocalUrl: 判断 URL 是否为本地地址（用于离线模式判断）
+ */
 import { v4 as uuidv4 } from 'uuid';
 import { getDb, saveDb } from './index';
 

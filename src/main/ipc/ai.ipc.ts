@@ -1,3 +1,28 @@
+/**
+ * AI 相关 IPC 处理器
+ *
+ * 注册所有 AI 功能的 IPC 通信：
+ *
+ * Provider/Model 管理（ipcMain.handle）：
+ * - ai-get-providers, ai-save-provider, ai-delete-provider
+ * - ai-get-models, ai-save-model, ai-delete-model, ai-toggle-model, ai-reorder-models
+ * - ai-has-usable-model: 检查是否有可用模型（考虑网络状态）
+ * - ai-test-model: 发送测试请求验证连接
+ * - ai-ollama-models: 获取 Ollama 本地已安装模型
+ *
+ * Prompt 模板（ipcMain.handle）：
+ * - ai-get-prompt-template, ai-set-prompt-template
+ *
+ * AI 对话（混合模式）：
+ * - ai-chat-stream（ipcMain.on）: 流式对话，通过 event.sender.send 推送 chunk
+ * - ai-chat（ipcMain.handle）: 非流式对话，一次性返回完整结果
+ *
+ * 对话历史（ipcMain.handle）：
+ * - ai-get-conversations, ai-get-conversation, ai-save-conversation
+ * - ai-delete-conversation, ai-clear-conversations
+ *
+ * 注意：流式对话使用 ipcMain.on 而非 handle，因为需要多次发送中间结果。
+ */
 import { ipcMain, BrowserWindow, net } from 'electron';
 import { getAllProviders, saveProvider, deleteProvider, getAllModels, saveModel, deleteModel, setModelEnabled, reorderModels, getProviderById, getEnabledModelsOrdered, isLocalUrl } from '../database/ai.repo';
 import { getSetting, setSetting, getConversations, getConversation, saveConversation, deleteConversation, clearConversations } from '../database/settings.repo';

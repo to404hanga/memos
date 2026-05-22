@@ -1,3 +1,40 @@
+/**
+ * AI 核心逻辑模块
+ *
+ * 本模块是 AI 助手功能的核心引擎，负责：
+ *
+ * 1. 工具定义（Tool Definitions）
+ *    - create_memo: 创建备忘录（客户端工具，生成预览卡片，用户确认后执行）
+ *    - list_memos: 查询备忘录列表（服务端工具，直接在主进程执行）
+ *    - complete_memo: 标记完成/取消完成（服务端工具）
+ *    - delete_memo: 删除备忘录（服务端工具）
+ *    - update_memo: 修改备忘录字段（服务端工具）
+ *
+ * 2. 服务端工具执行（executeServerTool）
+ *    - 支持模糊查询：通过标题关键词或精确 ID 定位目标备忘录
+ *    - 多条匹配时返回 ambiguous + 候选列表，让 AI 引导用户确认
+ *    - 执行完成后自动通知前端刷新
+ *
+ * 3. 系统提示词构建（buildSystemPrompt）
+ *    - 注入当前时间、时区、用户已有标签
+ *    - 支持用户自定义模板（变量替换）
+ *    - 定义 AI 行为规则
+ *
+ * 4. 智能上下文压缩（compressMessages）三层策略：
+ *    - 第1层：简单摘要（快速，保留头尾 + 中间概括）
+ *    - 第2层：Full Compact（结构化摘要，含分析和要点提取）
+ *    - 第3层：截断（兜底，从最旧消息开始丢弃）
+ *
+ * 5. 多轮工具循环（runConversation）
+ *    - 最多 4 轮循环：AI 调用工具 → 执行工具 → 将结果反馈给 AI → AI 继续回复
+ *    - 区分客户端工具和服务端工具
+ *
+ * 6. 多 Provider 自动降级（callLLM）
+ *    - Auto 模式：按全局优先级逐个尝试
+ *    - 指定模式：只调用指定模型
+ *    - 离线检测：仅允许本地 Provider（Ollama）
+ *    - 运行时状态更新：记录 lastError / lastUsedAt
+ */
 import { v4 as uuidv4 } from 'uuid';
 import { BrowserWindow } from 'electron';
 import { AiProvider, AiModel, getProviderById, getModelById, getEnabledModelsOrdered, updateModelRuntime, isLocalUrl } from '../database/ai.repo';

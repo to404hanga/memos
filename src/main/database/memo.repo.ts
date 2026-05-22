@@ -1,3 +1,13 @@
+/**
+ * 备忘录数据仓库（Repository）
+ *
+ * 封装 memos 表的所有 CRUD 操作，负责：
+ * - 数据库行（snake_case）与应用对象（camelCase）之间的转换
+ * - JSON 字段的序列化/反序列化（recurrence/reminders/tags/mutePeriods/attachments/webhook）
+ * - 查询：全部、回收站、按 ID、关键词搜索
+ * - 写入：插入、更新、删除（物理删除）、更新提醒时间
+ * - 清理：回收站 30 天过期自动清理、对话历史 30 天过期清理
+ */
 import { v4 as uuidv4 } from 'uuid';
 import { getDb, saveDb } from './index';
 

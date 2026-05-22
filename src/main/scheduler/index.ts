@@ -1,3 +1,39 @@
+/**
+ * 提醒调度器
+ *
+ * 负责备忘录提醒的定时触发，核心特性：
+ *
+ * 1. 多提醒支持：一个备忘录可设置多个不同类型的提醒，每个独立调度
+ *
+ * 2. 周期提醒类型：
+ *    - once: 单次提醒（到时触发后不再重复）
+ *    - daily: 每天指定时间
+ *    - workday: 工作日（跳过周末和法定假日）
+ *    - weekly: 每周指定星期几
+ *    - monthly: 每月指定日期
+ *
+ * 3. 中国法定假日日历：
+ *    - holidays: 法定假日集合（元旦/春节/清明/五一/端午/中秋/国庆）
+ *    - workdays: 调休补班日集合
+ *    - isWorkday(): 综合判断某天是否为工作日
+ *    - 覆盖 2025-2027 年数据
+ *
+ * 4. 静默期处理：
+ *    - 周期提醒在静默期内会自动跳过（向后推迟，最多 60 天）
+ *    - 单次提醒在静默期内直接跳过不触发
+ *
+ * 5. 触发行为：
+ *    - 系统通知（Notification）
+ *    - 主窗口弹窗（IPC 推送 reminder-triggered 事件）
+ *    - 企微 Webhook 推送（如已配置）
+ *    - 周期提醒触发后自动重新调度下一次
+ *
+ * 6. 定时器管理：
+ *    - activeTimers Map 维护每个备忘录的定时器列表
+ *    - scheduleReminder: 注册提醒（先清除旧定时器）
+ *    - clearMemoTimers: 清除指定备忘录的所有定时器
+ *    - loadAllReminders: 应用启动时为所有未完成备忘录注册提醒
+ */
 import { Memo, getAllMemos, getMemoById, updateMemoInDb } from '../database/memo.repo';
 import { updateReminderTime } from '../database/memo.repo';
 import { Notification, BrowserWindow } from 'electron';

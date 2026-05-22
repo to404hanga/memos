@@ -1,3 +1,21 @@
+/**
+ * 数据导入导出 IPC 处理器
+ *
+ * 导出功能（export-data）：
+ * - 将所有备忘录、标签数据序列化为 JSON
+ * - 收集关联的图片和附件文件
+ * - 内容中的本地图片路径转换为相对路径
+ * - 打包为 ZIP 文件（备忘录导出_YYYY-MM-DD.zip）
+ * - ZIP 结构：folderName/memos.json + folderName/images/ + folderName/attachments/
+ *
+ * 导入功能（import-data）：
+ * - 解压 ZIP 文件，定位 memos.json
+ * - 提取图片/附件到 userData 对应目录（不覆盖已有文件）
+ * - 导入标签（INSERT OR IGNORE 避免冲突）
+ * - 导入备忘录（按 ID 去重，已存在则跳过）
+ * - 还原图片路径为本地绝对路径
+ * - 为新导入的备忘录注册提醒调度
+ */
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';

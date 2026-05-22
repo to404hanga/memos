@@ -1,3 +1,30 @@
+/**
+ * 本地 HTTP API 服务（CLI 接入点）
+ *
+ * 在 127.0.0.1:19527 启动一个轻量级 HTTP 服务，供外部 CLI 工具访问。
+ * 每次应用启动时生成随机 Token 写入 .cli-token 文件，CLI 读取后用于鉴权。
+ *
+ * 安全机制：
+ * - 仅监听 127.0.0.1（不暴露到外网）
+ * - Bearer Token 鉴权（Authorization 头或 ?token= 查询参数）
+ * - GET /api/ping 不需要鉴权（用于探测服务是否存活）
+ *
+ * 支持的路由：
+ * - GET /api/memos: 获取所有备忘录
+ * - GET /api/trash: 获取回收站
+ * - GET /api/tags: 获取标签列表
+ * - GET /api/search?q=: 搜索备忘录
+ * - POST /api/memos: 创建备忘录
+ * - PUT /api/memos: 更新备忘录
+ * - DELETE /api/memos: 软删除备忘录
+ * - POST /api/memos/complete: 切换完成状态
+ * - POST /api/memos/pin: 切换置顶状态
+ * - POST /api/memos/restore: 从回收站恢复
+ * - DELETE /api/memos/permanent: 永久删除
+ * - DELETE /api/trash: 清空回收站
+ * - POST /api/tags: 创建标签
+ * - DELETE /api/tags: 删除标签
+ */
 import * as http from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb, saveDb } from '../database';

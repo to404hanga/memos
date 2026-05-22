@@ -1,3 +1,19 @@
+/**
+ * 备忘录相关 IPC 处理器
+ *
+ * 注册所有备忘录操作的 IPC handle，包括：
+ * - 备忘录 CRUD: get-memos, add-memo, update-memo, delete-memo
+ * - 搜索: search-memos
+ * - 回收站: get-trash, restore-memo, permanent-delete, empty-trash
+ * - 状态切换: toggle-complete, toggle-pin
+ * - 图片: select-image, save-dropped-image, get-image-path
+ * - 附件: select-attachment, save-dropped-file, open-attachment
+ * - 标签: get-tags, add-tag, update-tag, delete-tag
+ * - Webhook: test-webhook
+ *
+ * 图片和附件存储在 userData 目录下的 images/ 和 attachments/ 子目录中，
+ * 文件名使用 UUID 确保唯一性。
+ */
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';

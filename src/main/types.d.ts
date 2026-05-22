@@ -1,3 +1,11 @@
+/**
+ * 第三方库类型声明
+ *
+ * 为没有自带 TypeScript 类型的依赖库提供类型定义：
+ * - sql.js: 基于 WebAssembly 的 SQLite 实现（用于纯 JS 环境操作 SQLite）
+ * - adm-zip: ZIP 压缩/解压库（用于数据导入导出功能）
+ */
+
 declare module 'sql.js' {
   interface Database {
     run(sql: string, params?: any[]): void;

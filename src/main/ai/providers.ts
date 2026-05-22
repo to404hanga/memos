@@ -1,12 +1,43 @@
+/**
+ * LLM Provider 调用层
+ *
+ * 封装三种 LLM API 的调用逻辑，统一输入输出格式：
+ *
+ * 1. callOpenAi - OpenAI 兼容协议（DeepSeek/通义/智谱/混元/Moonshot/OpenAI 等）
+ *    - 端点: POST /chat/completions
+ *    - 支持 tool_calls 流式增量拼接
+ *    - 支持 reasoning_content（思考模式）
+ *
+ * 2. callAnthropic - Anthropic Claude Messages API
+ *    - 端点: POST /messages
+ *    - 消息格式为 content blocks（text/tool_use/thinking）
+ *    - tool_result 需包裹在 user 消息的 content block 中
+ *    - 支持 extended thinking
+ *
+ * 3. callOllama - Ollama 本地模型 API
+ *    - 端点: POST /api/chat
+ *    - 流式使用 NDJSON 格式（每行一个 JSON）
+ *    - 支持 think 字段（思考模式）
+ *
+ * 每种 Provider 都支持：
+ * - 非流式模式（同步等待完整响应）
+ * - 流式模式（通过 onDelta 回调逐块推送 thinking_delta / content_delta）
+ * - 工具调用解析（从响应中提取 tool_calls）
+ */
 import { v4 as uuidv4 } from 'uuid';
 import { AiProvider, AiModel } from '../database/ai.repo';
 import { httpJson, httpStream, joinUrl, safeJsonParse } from './http';
 
+/** 流式增量回调类型 */
 export type OnDelta = (chunk: any) => void;
 
+/** LLM 统一响应结果 */
 export interface LLMResult {
+  /** AI 回复的文本内容 */
   content: string;
+  /** 工具调用列表 */
   toolCalls: Array<{ id: string; name: string; arguments: any }>;
+  /** 思考/推理过程文本（仅思考模式下有值） */
   thinking?: string;
 }
 

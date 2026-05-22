@@ -1,4 +1,23 @@
-// HTTP 请求工具函数
+/**
+ * HTTP 请求工具函数
+ *
+ * 提供两种 HTTP 请求方式，均基于 Node.js 原生 http/https 模块（不依赖第三方库）：
+ *
+ * 1. httpJson - 普通 JSON 请求
+ *    - 发送 JSON 请求体，等待完整响应后返回解析后的数据
+ *    - 自动处理 HTTP 错误码（非 2xx 抛出 Error）
+ *    - 支持超时设置
+ *
+ * 2. httpStream - 流式请求（SSE / NDJSON）
+ *    - 发送请求后逐行读取响应流
+ *    - 每收到一行通过 onLine 回调推送给调用方
+ *    - 内部维护行缓冲区，正确处理跨 chunk 的行分割
+ *    - 用于 AI 流式对话响应
+ *
+ * 辅助工具：
+ * - joinUrl: URL 路径拼接
+ * - safeJsonParse: 安全 JSON 解析（解析失败返回 null 而非抛异常）
+ */
 
 export function httpJson({ url, method = 'POST', headers = {}, body, timeoutMs = 30000 }: {
   url: string;

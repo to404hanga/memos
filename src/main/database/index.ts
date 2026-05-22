@@ -1,3 +1,28 @@
+/**
+ * SQLite 数据库初始化与管理
+ *
+ * 使用 sql.js（WebAssembly 版 SQLite）在 Electron 主进程中运行数据库。
+ * 数据库文件存储在 ~/Library/Application Support/备忘录/memos.db。
+ *
+ * 核心功能：
+ * - initDatabase: 初始化数据库、创建表结构、执行版本迁移
+ * - saveDb: 将内存中的数据库状态持久化到文件
+ * - closeDatabase: 保存并关闭数据库
+ * - getDb/getDbPath: 获取数据库实例/路径
+ *
+ * 表结构：
+ * - memos: 备忘录主表（含软删除、多提醒、静默期、附件、Webhook）
+ * - tags: 标签表
+ * - settings: 键值对设置表
+ * - ai_providers: AI Provider 配置表
+ * - ai_models: AI 模型配置表（含优先级、思考模式、上下文限制）
+ * - ai_conversations: AI 对话历史表
+ *
+ * 迁移策略：
+ * - 使用 addColumnIfMissing 渐进式添加新列（兼容旧版数据库）
+ * - 旧版 ai_providers schema 冲突时自动 DROP 重建
+ * - 旧版单提醒数据自动迁移到 reminders 数组格式
+ */
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
 import * as path from 'path';
 import * as fs from 'fs';

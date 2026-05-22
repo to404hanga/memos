@@ -1,3 +1,15 @@
+/**
+ * Electron 主进程入口
+ *
+ * 负责应用的完整生命周期管理：
+ * 1. 应用初始化：设置 userData 路径、生成 CLI Token
+ * 2. 注册 local-file:// 自定义协议（用于安全加载本地图片）
+ * 3. 创建主窗口：macOS 原生标题栏风格、contextIsolation 安全模式
+ * 4. 系统托盘（Tray）：支持点击显示/右键菜单退出
+ * 5. 数据库初始化 + 旧数据清理（回收站 30 天过期、对话历史 30 天过期）
+ * 6. IPC 通信注册、提醒调度器启动、CLI HTTP 服务启动
+ * 7. 窗口关闭行为：macOS 下关闭窗口仅隐藏，通过 Dock/Tray 重新显示
+ */
 import { app, BrowserWindow, Tray, Menu, nativeImage, protocol, net } from 'electron';
 import * as path from 'path';
 import * as os from 'os';

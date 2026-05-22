@@ -1,3 +1,22 @@
+/**
+ * 标签、设置与对话历史数据仓库
+ *
+ * 管理三类数据：
+ *
+ * 标签（tags 表）：
+ * - getTags / addTag / updateTag / deleteTag: CRUD 操作
+ * - deleteTag 时会联动清理所有备忘录中的该标签引用
+ * - getTagNames: 获取纯名称列表（用于 AI 系统提示词）
+ *
+ * 设置（settings 表）：
+ * - getSetting / setSetting: 键值对存取（如 ai_prompt_template）
+ *
+ * AI 对话历史（ai_conversations 表）：
+ * - getConversations: 获取所有对话元数据（按更新时间倒序）
+ * - getConversation: 获取单个对话完整内容（含 messages JSON）
+ * - saveConversation: 创建或更新对话记录
+ * - deleteConversation / clearConversations: 删除
+ */
 import { getDb, saveDb } from './index';
 import { v4 as uuidv4 } from 'uuid';
 
