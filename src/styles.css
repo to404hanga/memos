@@ -2295,6 +2295,12 @@ input, textarea, button {
   color: var(--text-secondary);
 }
 
+[data-theme="dark"] .tag-chip.selected {
+  background: var(--tag-color, #007aff);
+  border-color: var(--tag-color, #007aff);
+  color: #fff;
+}
+
 [data-theme="dark"] .checkbox {
   border-color: #48484a;
 }
