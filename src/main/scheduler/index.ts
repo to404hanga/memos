@@ -183,12 +183,42 @@ export function scheduleReminder(memo: Memo, mainWindow: BrowserWindow | null): 
       targetDate = getNextOccurrence(rem);
       if (!targetDate) return;
       let attempts = 0;
+      // 跳过静默期内的日期
       while (isInMutePeriod(targetDate) && attempts < 60) {
         targetDate.setDate(targetDate.getDate() + 1);
         targetDate.setHours(rem.hour || 0, rem.minute || 0, 0, 0);
         attempts++;
       }
       if (attempts >= 60) return;
+      // 跳出静默期后，需重新校验日期是否满足周期条件
+      if (rem.type === 'workday') {
+        // 确保落在工作日上
+        let extraAttempts = 0;
+        while (!isWorkday(targetDate) && extraAttempts < 30) {
+          targetDate.setDate(targetDate.getDate() + 1);
+          targetDate.setHours(rem.hour || 0, rem.minute || 0, 0, 0);
+          extraAttempts++;
+        }
+      } else if (rem.type === 'weekly' && rem.dayOfWeek !== undefined) {
+        // 确保落在正确的星期几上
+        let extraAttempts = 0;
+        while (targetDate.getDay() !== rem.dayOfWeek && extraAttempts < 7) {
+          targetDate.setDate(targetDate.getDate() + 1);
+          targetDate.setHours(rem.hour || 0, rem.minute || 0, 0, 0);
+          extraAttempts++;
+        }
+      } else if (rem.type === 'monthly' && rem.dayOfMonth !== undefined) {
+        // 确保落在正确的日期上
+        if (targetDate.getDate() !== rem.dayOfMonth) {
+          targetDate.setMonth(targetDate.getMonth() + 1);
+          targetDate.setDate(rem.dayOfMonth);
+          targetDate.setHours(rem.hour || 0, rem.minute || 0, 0, 0);
+          // 处理月份天数不足的情况（如31号）
+          if (targetDate.getDate() !== rem.dayOfMonth) {
+            targetDate.setDate(0); // 退到上月最后一天
+          }
+        }
+      }
     }
 
     const now = new Date();
