@@ -33,6 +33,8 @@ export default function App(): React.ReactElement {
   const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
   const [showAiChat, setShowAiChat] = useState(false);
   const [aiDraft, setAiDraft] = useState<MemoFormData | null>(null);
+  const [aiAttachedMemo, setAiAttachedMemo] = useState<Memo | null>(null);
+  const aiInputKey = useRef(0);
   const [reminder, setReminder] = useState<ReminderData | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -66,6 +68,12 @@ export default function App(): React.ReactElement {
     setEditingMemo(null);
     setAiDraft(null);
     setShowForm(false);
+  };
+
+  const handleSendToAi = (m: Memo) => {
+    aiInputKey.current += 1;
+    setAiAttachedMemo(m);
+    setShowAiChat(true);
   };
 
   return (
@@ -189,6 +197,7 @@ export default function App(): React.ReactElement {
             onEdit={handleEdit}
             onDelete={memo.deleteMemo}
             onPin={memo.togglePin}
+            onSendToAi={handleSendToAi}
           />
           {memo.filteredMemos.length === 0 && (
             <div className="empty-state">
@@ -243,7 +252,9 @@ export default function App(): React.ReactElement {
 
       {showAiChat && (
         <AiChatModal
-          onClose={() => setShowAiChat(false)}
+          onClose={() => { setShowAiChat(false); setAiAttachedMemo(null); }}
+          attachedMemo={aiAttachedMemo}
+          attachKey={aiInputKey.current}
           onConfirmCreate={async (m) => {
             await memo.addMemoWithTags(m);
           }}

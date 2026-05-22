@@ -28,11 +28,20 @@ interface MemoItemProps {
   onEdit: (memo: Memo) => void;
   onDelete: (id: string) => void;
   onPin: (id: string) => void;
+  onSendToAi?: (memo: Memo) => void;
 }
 
-export default function MemoItem({ memo, onToggle, onEdit, onDelete, onPin }: MemoItemProps): React.ReactElement {
+export default function MemoItem({ memo, onToggle, onEdit, onDelete, onPin, onSendToAi }: MemoItemProps): React.ReactElement {
   const [showConfirm, setShowConfirm] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const closeContextMenu = () => setContextMenu(null);
 
   const formatTime = (isoStr: string): string => {
     const d = new Date(isoStr);
@@ -88,7 +97,32 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete, onPin }: Me
   );
 
   return (
-    <div className={`memo-item ${memo.completed ? 'completed' : ''} ${memo.pinned ? 'pinned' : ''}`}>
+    <div className={`memo-item ${memo.completed ? 'completed' : ''} ${memo.pinned ? 'pinned' : ''}`} onContextMenu={handleContextMenu}>
+      {contextMenu && (
+        <>
+          <div className="context-menu-overlay" onClick={closeContextMenu} />
+          <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
+            {onSendToAi && (
+              <div className="context-menu-item" onClick={() => { onSendToAi(memo); closeContextMenu(); }}>
+                <span className="context-menu-icon">🤖</span>发送到 AI 对话
+              </div>
+            )}
+            <div className="context-menu-item" onClick={() => { onEdit(memo); closeContextMenu(); }}>
+              <span className="context-menu-icon">✏️</span>编辑
+            </div>
+            <div className="context-menu-item" onClick={() => { onPin(memo.id); closeContextMenu(); }}>
+              <span className="context-menu-icon">📌</span>{memo.pinned ? '取消置顶' : '置顶'}
+            </div>
+            <div className="context-menu-item" onClick={() => { onToggle(memo.id); closeContextMenu(); }}>
+              <span className="context-menu-icon">{memo.completed ? '↩️' : '✅'}</span>{memo.completed ? '取消完成' : '标记完成'}
+            </div>
+            <div className="context-menu-divider" />
+            <div className="context-menu-item danger" onClick={() => { onDelete(memo.id); closeContextMenu(); }}>
+              <span className="context-menu-icon">🗑️</span>删除
+            </div>
+          </div>
+        </>
+      )}
       <div className="memo-main">
         <div className={`checkbox ${memo.completed ? 'checked' : ''}`} onClick={() => onToggle(memo.id)}>
           {memo.completed && '✓'}

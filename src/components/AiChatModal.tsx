@@ -25,6 +25,10 @@ interface Props {
   onConfirmCreate: (memo: MemoFormData) => Promise<void> | void;
   /** 编辑草稿回调（用户点击预览卡片的"修改"按钮，跳转到表单编辑） */
   onEditDraft: (memo: MemoFormData) => void;
+  /** 外部附加的备忘录（如右键菜单"发送到 AI"），以标签卡片形式展示 */
+  attachedMemo?: { id: string; title: string; content?: string; tags?: string[] } | null;
+  /** 配合 attachedMemo 使用，每次变化时重新触发附加 */
+  attachKey?: number;
 }
 
 /** 服务端工具执行步骤 */
@@ -71,9 +75,10 @@ interface DisplayMessage extends AiMessage {
 /** 模型选择：'auto' 表示自动降级模式，string 为具体 modelId */
 type ModelChoice = 'auto' | string;
 
-export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Props): React.ReactElement {
+export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attachedMemo, attachKey }: Props): React.ReactElement {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState('');
+  const [attachedMemos, setAttachedMemos] = useState<Array<{ id: string; title: string; content?: string; tags?: string[] }>>([]);
   const [sending, setSending] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [usable, setUsable] = useState<boolean | null>(null);
@@ -164,6 +169,18 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
     ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
   }, [input]);
 
+  // 外部附加备忘录（如右键菜单"发送到 AI"）
+  useEffect(() => {
+    if (attachedMemo) {
+      setAttachedMemos((prev) => {
+        // 避免重复附加同一条
+        if (prev.some((m) => m.id === attachedMemo.id)) return prev;
+        return [...prev, attachedMemo];
+      });
+      setTimeout(() => textareaRef.current?.focus(), 100);
+    }
+  }, [attachedMemo, attachKey]);
+
   const refresh = async () => {
     const ok = await window.api.aiHasUsableModel();
     setUsable(ok);
@@ -239,9 +256,23 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
 
   const send = async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if ((!text && attachedMemos.length === 0) || sending) return;
     setInput('');
-    const userMsg: DisplayMessage = { role: 'user', content: text, ts: new Date().toISOString() };
+
+    // 构造用户消息：将附加的备忘录信息作为上下文拼入
+    let content = text;
+    if (attachedMemos.length > 0) {
+      const memoContext = attachedMemos.map((m) => {
+        const parts = [`[备忘录: ${m.title}]`];
+        if (m.content) parts.push(m.content.slice(0, 300));
+        if (m.tags && m.tags.length) parts.push(`标签: ${m.tags.join('、')}`);
+        return parts.join('\n');
+      }).join('\n---\n');
+      content = text ? `${memoContext}\n\n${text}` : memoContext;
+    }
+    setAttachedMemos([]);
+
+    const userMsg: DisplayMessage = { role: 'user', content, ts: new Date().toISOString() };
     const next = [...messages, userMsg];
     setMessages(next);
     setSending(true);
@@ -645,6 +676,21 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
 
         <div className="ai-composer-wrap">
           <div className="ai-composer">
+            {attachedMemos.length > 0 && (
+              <div className="ai-attached-memos">
+                {attachedMemos.map((m) => (
+                  <div key={m.id} className="ai-attached-chip">
+                    <span className="ai-attached-chip-icon">📝</span>
+                    <span className="ai-attached-chip-title">{m.title}</span>
+                    <button
+                      className="ai-attached-chip-remove"
+                      onClick={() => setAttachedMemos((prev) => prev.filter((x) => x.id !== m.id))}
+                      title="移除"
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
             <textarea
               ref={textareaRef}
               className="ai-composer-input"
@@ -695,7 +741,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
                   <button
                     className="ai-composer-send"
                     onClick={send}
-                    disabled={!input.trim()}
+                    disabled={!input.trim() && attachedMemos.length === 0}
                     title="发送 (Enter)"
                     aria-label="发送"
                   >
