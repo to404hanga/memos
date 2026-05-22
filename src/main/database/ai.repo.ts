@@ -1,0 +1,226 @@
+import { v4 as uuidv4 } from 'uuid';
+import { getDb, saveDb } from './index';
+
+export interface AiProvider {
+  id: string;
+  name: string;
+  type: string;
+  baseUrl: string;
+  apiKey: string;
+  createdAt: string;
+}
+
+export interface AiModel {
+  id: string;
+  providerId: string;
+  name: string;
+  displayName?: string;
+  enabled: boolean;
+  thinking: boolean;
+  priority: number;
+  lastError?: string;
+  lastUsedAt?: string;
+  createdAt: string;
+}
+
+function rowToProvider(row: any): AiProvider {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    baseUrl: row.base_url,
+    apiKey: row.api_key || '',
+    createdAt: row.created_at,
+  };
+}
+
+function rowToModel(row: any): AiModel {
+  return {
+    id: row.id,
+    providerId: row.provider_id,
+    name: row.name,
+    displayName: row.display_name || undefined,
+    enabled: row.enabled === 1,
+    thinking: row.thinking === 1,
+    priority: row.priority,
+    lastError: row.last_error || undefined,
+    lastUsedAt: row.last_used_at || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+export function getAllProviders(): AiProvider[] {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM ai_providers ORDER BY created_at ASC');
+  const rows: any[] = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows.map(rowToProvider);
+}
+
+export function getProviderById(id: string): AiProvider | null {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM ai_providers WHERE id = ?');
+  stmt.bind([id]);
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return rowToProvider(row);
+  }
+  stmt.free();
+  return null;
+}
+
+export function getAllModels(): AiModel[] {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM ai_models ORDER BY priority ASC');
+  const rows: any[] = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows.map(rowToModel);
+}
+
+export function getModelById(id: string): AiModel | null {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM ai_models WHERE id = ?');
+  stmt.bind([id]);
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return rowToModel(row);
+  }
+  stmt.free();
+  return null;
+}
+
+export function getEnabledModelsOrdered(): AiModel[] {
+  const db = getDb();
+  const stmt = db.prepare('SELECT * FROM ai_models WHERE enabled = 1 ORDER BY priority ASC');
+  const rows: any[] = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows.map(rowToModel);
+}
+
+export function saveProvider(input: any): AiProvider {
+  const db = getDb();
+  const isUpdate = input.id && getProviderById(input.id);
+  if (isUpdate) {
+    db.run(
+      'UPDATE ai_providers SET name = ?, type = ?, base_url = ?, api_key = ? WHERE id = ?',
+      [input.name, input.type, input.baseUrl, input.apiKey || '', input.id]
+    );
+    saveDb();
+    return getProviderById(input.id)!;
+  }
+  const id = input.id || uuidv4();
+  db.run(
+    'INSERT INTO ai_providers (id, name, type, base_url, api_key, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, input.name, input.type, input.baseUrl, input.apiKey || '', new Date().toISOString()]
+  );
+  saveDb();
+  return getProviderById(id)!;
+}
+
+export function deleteProvider(id: string): boolean {
+  const db = getDb();
+  const target = getProviderById(id);
+  if (!target) return false;
+
+  db.run('DELETE FROM ai_models WHERE provider_id = ?', [id]);
+  db.run('DELETE FROM ai_providers WHERE id = ?', [id]);
+
+  // 重排 priority
+  const remain = getAllModels();
+  db.run('UPDATE ai_models SET priority = priority + 100000');
+  remain.forEach((m, idx) => {
+    db.run('UPDATE ai_models SET priority = ? WHERE id = ?', [idx, m.id]);
+  });
+  saveDb();
+  return true;
+}
+
+export function saveModel(input: any): AiModel {
+  const db = getDb();
+  const isUpdate = input.id && getModelById(input.id);
+  if (isUpdate) {
+    db.run(
+      'UPDATE ai_models SET name = ?, display_name = ?, thinking = ? WHERE id = ?',
+      [input.name, input.displayName || null, input.thinking ? 1 : 0, input.id]
+    );
+    saveDb();
+    return getModelById(input.id)!;
+  }
+  if (!input.providerId) throw new Error('providerId 不能为空');
+
+  const maxStmt = db.prepare('SELECT COALESCE(MAX(priority), -1) AS m FROM ai_models');
+  maxStmt.step();
+  const max = (maxStmt.getAsObject() as any).m;
+  maxStmt.free();
+  const id = input.id || uuidv4();
+  db.run(
+    'INSERT INTO ai_models (id, provider_id, name, display_name, enabled, thinking, priority, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, input.providerId, input.name, input.displayName || null, input.enabled === false ? 0 : 1, input.thinking ? 1 : 0, max + 1, new Date().toISOString()]
+  );
+  saveDb();
+  return getModelById(id)!;
+}
+
+export function deleteModel(id: string): boolean {
+  const db = getDb();
+  const target = getModelById(id);
+  if (!target) return false;
+  db.run('DELETE FROM ai_models WHERE id = ?', [id]);
+  db.run('UPDATE ai_models SET priority = priority - 1 WHERE priority > ?', [target.priority]);
+  saveDb();
+  return true;
+}
+
+export function setModelEnabled(id: string, enabled: boolean): boolean {
+  const db = getDb();
+  db.run('UPDATE ai_models SET enabled = ? WHERE id = ?', [enabled ? 1 : 0, id]);
+  saveDb();
+  return true;
+}
+
+export function reorderModels(sortedIds: string[]): void {
+  const db = getDb();
+  db.run('UPDATE ai_models SET priority = priority + 100000');
+  sortedIds.forEach((id, idx) => {
+    db.run('UPDATE ai_models SET priority = ? WHERE id = ?', [idx, id]);
+  });
+  saveDb();
+}
+
+export function updateModelRuntime(id: string, fields: { lastError?: string | null; lastUsedAt?: string | null }): void {
+  const db = getDb();
+  const sets: string[] = [];
+  const args: any[] = [];
+  if ('lastError' in fields) {
+    sets.push('last_error = ?');
+    args.push(fields.lastError || null);
+  }
+  if ('lastUsedAt' in fields) {
+    sets.push('last_used_at = ?');
+    args.push(fields.lastUsedAt || null);
+  }
+  if (sets.length === 0) return;
+  args.push(id);
+  db.run(`UPDATE ai_models SET ${sets.join(', ')} WHERE id = ?`, args);
+  saveDb();
+}
+
+export function isLocalUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1' ||
+      /^192\.168\./.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+    );
+  } catch { return false; }
+}

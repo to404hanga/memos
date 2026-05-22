@@ -3,13 +3,14 @@
   "productName": "备忘录",
   "version": "1.0.0",
   "description": "桌面备忘录提醒应用",
-  "main": "main.js",
+  "main": "dist/main/index.js",
   "bin": {
     "memo": "./cli.js"
   },
   "scripts": {
-    "start": "electron .",
-    "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && electron .\""
+    "build:main": "npx webpack --config webpack.main.config.js",
+    "start": "npm run build:main && electron .",
+    "dev": "concurrently \"npx webpack serve --mode development\" \"npx webpack --config webpack.main.config.js --watch\" \"wait-on http://localhost:3000 && DEV_SERVER=1 electron .\""
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
@@ -25,6 +26,7 @@
     "@babel/core": "^7.24.0",
     "@babel/preset-env": "^7.24.0",
     "@babel/preset-react": "^7.23.3",
+    "@types/node": "^20.19.41",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",
