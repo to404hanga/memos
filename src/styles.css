@@ -3812,6 +3812,15 @@ input, textarea, button {
   cursor: not-allowed;
 }
 
+.ai-composer-send.abort {
+  background: #ff3b30;
+  color: #fff;
+}
+
+.ai-composer-send.abort:hover {
+  background: #e0332b;
+}
+
 .ai-composer-send-loading {
   font-size: 16px;
   font-weight: bold;

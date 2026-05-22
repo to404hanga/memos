@@ -827,7 +827,7 @@ function updateModelRuntime(id, fields) {
 // 客户端工具（不立即执行，由 UI 渲染卡片由用户确认）
 const CLIENT_TOOLS = new Set(['create_memo']);
 // 服务端工具（立即执行并把结果回灌给 LLM）
-const SERVER_TOOLS = new Set(['list_memos', 'complete_memo', 'delete_memo']);
+const SERVER_TOOLS = new Set(['list_memos', 'complete_memo', 'delete_memo', 'update_memo']);
 
 const AI_TOOLS_OPENAI = [
   {
@@ -901,6 +901,37 @@ const AI_TOOLS_OPENAI = [
         type: 'object',
         properties: {
           query: { type: 'string', description: '备忘录的标题关键词或 ID' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_memo',
+      description: '修改一条已有的备忘录。通过标题关键词或 ID 定位，然后更新指定字段（仅传需要修改的字段，不传的保持不变）。如果匹配到多条，返回候选列表让用户确认。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '备忘录的标题关键词或精确 ID，用于定位目标' },
+          title: { type: 'string', description: '新标题（可选，不传则不修改）' },
+          content: { type: 'string', description: '新内容 Markdown（可选）' },
+          tags: { type: 'array', items: { type: 'string' }, description: '新标签列表（可选，会覆盖原标签）' },
+          addTags: { type: 'array', items: { type: 'string' }, description: '追加标签（不影响已有标签，与 tags 二选一）' },
+          removeTags: { type: 'array', items: { type: 'string' }, description: '移除指定标签（与 tags 二选一）' },
+          reminderTime: { type: 'string', description: '新的提醒时间 ISO 8601（可选，传空字符串则清除提醒）' },
+          recurrence: {
+            type: 'object',
+            description: '新的周期提醒配置（可选，传 null 则清除）',
+            properties: {
+              type: { type: 'string', enum: ['once', 'daily', 'workday', 'weekly', 'monthly'] },
+              hour: { type: 'number' },
+              minute: { type: 'number' },
+              dayOfWeek: { type: 'number' },
+              dayOfMonth: { type: 'number' },
+            },
+          },
         },
         required: ['query'],
       },
@@ -1052,6 +1083,83 @@ function executeServerTool(name, args) {
     };
   }
 
+  if (name === 'update_memo') {
+    const query = (args && args.query || '').trim();
+    if (!query) return { error: '缺少 query 参数' };
+
+    // 定位目标
+    let target = getMemoById(query);
+    if (!target) {
+      const all = getAllMemos();
+      const keyword = query.toLowerCase();
+      const matches = all.filter((m) => (m.title || '').toLowerCase().includes(keyword));
+      if (matches.length === 0) return { error: `未找到包含「${query}」的备忘录` };
+      if (matches.length > 1) {
+        return {
+          ambiguous: true,
+          message: `找到 ${matches.length} 条匹配，请用户确认修改哪一条：`,
+          candidates: matches.slice(0, 10).map((m) => ({ id: m.id, title: m.title })),
+        };
+      }
+      target = matches[0];
+    }
+
+    // 应用变更（仅更新传入的字段）
+    const changes = [];
+    if (typeof args.title === 'string') { target.title = args.title; changes.push('标题'); }
+    if (typeof args.content === 'string') { target.content = args.content; changes.push('内容'); }
+    if (Array.isArray(args.tags)) { target.tags = args.tags; changes.push('标签'); }
+    else if (Array.isArray(args.addTags) && args.addTags.length > 0) {
+      const existing = new Set(target.tags || []);
+      args.addTags.forEach((t) => existing.add(t));
+      target.tags = Array.from(existing);
+      changes.push(`添加标签: ${args.addTags.join(', ')}`);
+    } else if (Array.isArray(args.removeTags) && args.removeTags.length > 0) {
+      const toRemove = new Set(args.removeTags);
+      target.tags = (target.tags || []).filter((t) => !toRemove.has(t));
+      changes.push(`移除标签: ${args.removeTags.join(', ')}`);
+    }
+    if ('reminderTime' in args) {
+      if (args.reminderTime === '' || args.reminderTime === null) {
+        target.reminderTime = null;
+        target.reminders = target.reminders.filter((r) => r.type !== 'once');
+        changes.push('清除提醒时间');
+      } else if (typeof args.reminderTime === 'string') {
+        target.reminderTime = args.reminderTime;
+        // 更新 reminders 中的 once 记录
+        const onceIdx = target.reminders.findIndex((r) => r.type === 'once');
+        if (onceIdx >= 0) target.reminders[onceIdx].time = args.reminderTime;
+        else target.reminders.push({ type: 'once', time: args.reminderTime });
+        changes.push('提醒时间');
+      }
+    }
+    if ('recurrence' in args) {
+      if (args.recurrence === null) {
+        target.recurrence = null;
+        target.reminders = target.reminders.filter((r) => r.type === 'once');
+        changes.push('清除周期提醒');
+      } else if (args.recurrence && args.recurrence.type) {
+        target.recurrence = args.recurrence;
+        // 替换/添加周期 reminder
+        const periodicIdx = target.reminders.findIndex((r) => r.type !== 'once');
+        if (periodicIdx >= 0) target.reminders[periodicIdx] = args.recurrence;
+        else target.reminders.push(args.recurrence);
+        changes.push('周期提醒');
+      }
+    }
+
+    if (changes.length === 0) {
+      return { success: true, message: `未指定任何修改字段，「${target.title}」保持不变` };
+    }
+
+    updateMemoInDb(target);
+    scheduleReminder(target);
+    return {
+      success: true,
+      message: `已更新「${target.title}」的${changes.join('、')} ✏️`,
+    };
+  }
+
   return { error: `未知工具: ${name}` };
 }
 
@@ -1074,13 +1182,16 @@ function buildSystemPrompt() {
     '- list_memos：查询用户已有的待办列表，可按 keyword/tag/status 过滤',
     '- complete_memo：标记待办为已完成（或 undo 取消完成），按标题关键词或 ID 匹配',
     '- delete_memo：删除待办（移入回收站），按标题关键词或 ID 匹配',
+    '- update_memo：修改待办的标题/内容/标签/提醒时间/周期（仅传需改字段），按标题关键词或 ID 匹配',
     '',
     '规则：',
     '1. 用户用自然语言描述新任务时，提取标题、提醒时间、标签等字段，调用 create_memo',
     '2. 用户询问"我有什么待办 / 帮我看看任务"等，先调用 list_memos 拿到数据再回复',
     '3. 用户说"把xx完成了 / xx已经做完了"，调用 complete_memo',
     '4. 用户说"删掉xx / 把xx去掉"，调用 delete_memo',
-    '5. 如果 complete_memo 或 delete_memo 返回 ambiguous（多条匹配），将候选列表展示给用户，询问具体是哪一条',
+    '5. 用户说"把xx改成… / 给xx加个标签 / 修改xx的提醒时间"，直接调用 update_memo（不需要先 list_memos 确认）',
+    '6. 如果 complete_memo / delete_memo / update_memo 返回 ambiguous（多条匹配），将候选列表展示给用户，询问具体是哪一条',
+    '7. 如果 complete_memo / delete_memo / update_memo 返回 error（未找到），告知用户并建议检查标题关键词',
     '6. 时间表达需转为具体时间（基于上方"当前时间"）：',
     '   - "明天下午3点" → 当前日期+1，15:00',
     '   - "下周一上午9点" → 计算下周一的日期',
@@ -1613,7 +1724,7 @@ async function runConversation(provider, model, initialMessages, onDelta) {
     }
 
     // 如果有写操作（complete/delete），通知主窗口刷新列表
-    const hasMutation = serverCalls.some((tc) => tc.name === 'complete_memo' || tc.name === 'delete_memo');
+    const hasMutation = serverCalls.some((tc) => tc.name === 'complete_memo' || tc.name === 'delete_memo' || tc.name === 'update_memo');
     if (hasMutation && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('memos-changed');
     }

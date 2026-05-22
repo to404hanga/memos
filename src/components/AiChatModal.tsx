@@ -43,6 +43,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
   const [warning, setWarning] = useState<string | null>(null);
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [models, setModels] = useState<AiModel[]>([]);
+  const activeStreamId = useRef<string | null>(null);
   const [modelChoice, setModelChoice] = useState<ModelChoice>(() => {
     return (localStorage.getItem('ai-model-choice') as ModelChoice) || 'auto';
   });
@@ -134,12 +135,18 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
       streaming: true,
     }]);
 
-    window.api.aiChatStream(
+    const sid = Date.now().toString() + Math.random().toString(36).slice(2);
+    activeStreamId.current = sid;
+
+    const streamId = window.api.aiChatStream(
       {
         messages: wireMessages,
         modelId: modelChoice === 'auto' ? undefined : modelChoice,
+        streamId: sid,
       },
       (chunk) => {
+        // 如果已打断，忽略后续 chunk
+        if (activeStreamId.current !== sid) return;
         if (chunk.type === 'thinking_delta') {
           setMessages((prev) => {
             const updated = [...prev];
@@ -173,6 +180,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
             list_memos: '查询备忘录',
             complete_memo: '标记完成',
             delete_memo: '删除备忘录',
+            update_memo: '修改备忘录',
           };
           const label = toolLabels[chunk.name || ''] || chunk.name || '工具调用';
           setMessages((prev) => {
@@ -238,6 +246,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
             };
             return updated;
           });
+          activeStreamId.current = null;
           setSending(false);
         } else if (chunk.type === 'error') {
           setMessages((prev) => {
@@ -250,10 +259,22 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
             };
             return updated;
           });
+          activeStreamId.current = null;
           setSending(false);
         }
       }
     );
+  };
+
+  const handleAbort = () => {
+    if (!sending) return;
+    activeStreamId.current = null;
+    window.api.aiChatStreamOff('');
+    setSending(false);
+    // 把当前 streaming 消息标记为结束
+    setMessages((prev) => prev.map((m) =>
+      m.streaming ? { ...m, streaming: false, content: m.content + '\n\n_(已打断)_' } : m
+    ));
   };
 
   const handleConfirm = async (msgIdx: number, tc: AiToolCall) => {
@@ -449,22 +470,31 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft }: Pro
                 <span className="ai-composer-model-label">{selectedLabel}</span>
                 <span className="ai-composer-model-caret">▾</span>
               </button>
-              <button
-                className="ai-composer-send"
-                onClick={send}
-                disabled={sending || !input.trim()}
-                title="发送 (Enter)"
-                aria-label="发送"
-              >
-                {sending ? (
-                  <span className="ai-composer-send-loading">…</span>
-                ) : (
+              {sending ? (
+                <button
+                  className="ai-composer-send abort"
+                  onClick={handleAbort}
+                  title="打断 (Stop)"
+                  aria-label="打断"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  className="ai-composer-send"
+                  onClick={send}
+                  disabled={!input.trim()}
+                  title="发送 (Enter)"
+                  aria-label="发送"
+                >
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                     <polyline points="13 6 19 12 13 18"></polyline>
                   </svg>
-                )}
-              </button>
+                </button>
+              )}
             </div>
             {showModelMenu && (
               <>
