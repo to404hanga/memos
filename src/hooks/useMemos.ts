@@ -10,7 +10,7 @@
  * - 导入导出：ZIP 格式的数据备份与恢复
  * - 标签联动：AI 创建备忘录时自动创建不存在的标签
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { Memo, MemoFormData, Tag } from '../../types/global';
 
 /** 列表视图的筛选类型 */
@@ -156,28 +156,30 @@ export function useMemos() {
     refreshTags();
   };
 
-  // 过滤
-  const filteredMemos = memos.filter((m) => {
+  // 过滤（useMemo 缓存，仅依赖项变化时重新计算）
+  const filteredMemos = useMemo(() => memos.filter((m) => {
     if (filter === 'active' && m.completed) return false;
     if (filter === 'completed' && !m.completed) return false;
     if (filterTag === '__none__' && m.tags && m.tags.length > 0) return false;
     if (filterTag && filterTag !== '__none__' && (!m.tags || !m.tags.includes(filterTag))) return false;
     return true;
-  });
+  }), [memos, filter, filterTag]);
 
-  const tagFilteredMemos = !filterTag
+  const tagFilteredMemos = useMemo(() => !filterTag
     ? memos
     : filterTag === '__none__'
       ? memos.filter((m) => !m.tags || m.tags.length === 0)
-      : memos.filter((m) => m.tags && m.tags.includes(filterTag));
+      : memos.filter((m) => m.tags && m.tags.includes(filterTag)),
+  [memos, filterTag]);
 
-  const tagFilteredTrash = !filterTag
+  const tagFilteredTrash = useMemo(() => !filterTag
     ? trashMemos
     : filterTag === '__none__'
       ? trashMemos.filter((m) => !m.tags || m.tags.length === 0)
-      : trashMemos.filter((m) => m.tags && m.tags.includes(filterTag));
+      : trashMemos.filter((m) => m.tags && m.tags.includes(filterTag)),
+  [trashMemos, filterTag]);
 
-  const activeCount = memos.filter((m) => !m.completed).length;
+  const activeCount = useMemo(() => memos.filter((m) => !m.completed).length, [memos]);
 
   return {
     memos, filteredMemos, tagFilteredMemos, trashMemos, tagFilteredTrash,
