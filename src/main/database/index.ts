@@ -297,9 +297,29 @@ export async function initDatabase(): Promise<void> {
   const SQL = await initSqlJs();
   dbPath = path.join(app.getPath('userData'), 'memos.db');
 
+  let recovered = false;
+
   if (fs.existsSync(dbPath)) {
-    const buffer = fs.readFileSync(dbPath);
-    db = new SQL.Database(buffer);
+    try {
+      const buffer = fs.readFileSync(dbPath);
+      db = new SQL.Database(buffer);
+      // 验证数据库完整性（简单查询测试）
+      db.exec("SELECT 1");
+    } catch (err: any) {
+      console.error('[DB] 数据库文件加载失败，尝试恢复:', err.message || err);
+      // 备份损坏的文件
+      const corruptPath = dbPath + '.corrupt.' + Date.now();
+      try {
+        fs.copyFileSync(dbPath, corruptPath);
+        console.log(`[DB] 已备份损坏文件 → ${path.basename(corruptPath)}`);
+      } catch (backupErr: any) {
+        console.error('[DB] 备份损坏文件失败:', backupErr.message || backupErr);
+      }
+      // 创建全新空数据库
+      db = new SQL.Database();
+      recovered = true;
+      console.log('[DB] 已创建新的空数据库');
+    }
   } else {
     db = new SQL.Database();
   }
@@ -309,6 +329,19 @@ export async function initDatabase(): Promise<void> {
 
   saveDb();
   console.log(`[DB] SQLite 已初始化: ${dbPath} (version: ${LATEST_VERSION})`);
+
+  // 通知用户数据库已恢复
+  if (recovered) {
+    const { dialog } = require('electron');
+    setImmediate(() => {
+      dialog.showMessageBox({
+        type: 'warning',
+        title: '数据库恢复',
+        message: '数据库文件损坏，已自动创建新数据库。',
+        detail: '损坏的数据库文件已备份（.corrupt 后缀），如需恢复数据请联系技术支持。',
+      }).catch(() => {});
+    });
+  }
 }
 
 export function closeDatabase(): void {
