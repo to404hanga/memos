@@ -15,6 +15,38 @@
  */
 import { Memo } from '../database/memo.repo';
 
+/**
+ * Webhook URL 安全校验
+ * 防止 SSRF：禁止访问内网地址，仅允许 HTTPS
+ */
+function validateWebhookUrl(url: string): { valid: boolean; error?: string } {
+  try {
+    const u = new URL(url);
+    // 仅允许 HTTPS
+    if (u.protocol !== 'https:') {
+      return { valid: false, error: '仅支持 HTTPS 协议' };
+    }
+    // 禁止 localhost 和内网 IP
+    const hostname = u.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1' ||
+      /^192\.168\./.test(hostname) ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      hostname.endsWith('.local')
+    ) {
+      return { valid: false, error: '禁止访问内网地址' };
+    }
+    return { valid: true };
+  } catch {
+    return { valid: false, error: 'URL 格式无效' };
+  }
+}
+
 export function replaceWebhookVars(template: string, memo: any, time: string): string {
   return template
     .replace(/\{\{title\}\}/g, memo.title || '')
@@ -25,6 +57,13 @@ export function replaceWebhookVars(template: string, memo: any, time: string): s
 }
 
 function sendWechatWebhook(url: string, markdownContent: string): Promise<any> {
+  // 安全校验
+  const check = validateWebhookUrl(url);
+  if (!check.valid) {
+    console.error(`[Webhook] URL 校验失败: ${check.error}`);
+    return Promise.resolve({ success: false, error: check.error });
+  }
+
   const payload = JSON.stringify({
     msgtype: 'markdown_v2',
     markdown_v2: { content: markdownContent },
