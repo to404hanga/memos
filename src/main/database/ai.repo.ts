@@ -20,7 +20,34 @@
  * - isLocalUrl: 判断 URL 是否为本地地址（用于离线模式判断）
  */
 import { v4 as uuidv4 } from 'uuid';
+import { safeStorage } from 'electron';
 import { getDb, saveDb } from './index';
+
+// ===== API Key 加解密（使用系统密钥链） =====
+
+function encryptApiKey(plainKey: string): string {
+  if (!plainKey) return '';
+  if (safeStorage.isEncryptionAvailable()) {
+    return safeStorage.encryptString(plainKey).toString('base64');
+  }
+  // 加密不可用时原样存储（首次启动 app.ready 前或 Linux 无 libsecret）
+  return plainKey;
+}
+
+function decryptApiKey(stored: string): string {
+  if (!stored) return '';
+  // 尝试解密：如果是 base64 编码的加密数据则解密，否则当作明文返回
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
+      const buf = Buffer.from(stored, 'base64');
+      return safeStorage.decryptString(buf);
+    } catch {
+      // 解密失败说明是旧版明文数据，原样返回
+      return stored;
+    }
+  }
+  return stored;
+}
 
 export interface AiProvider {
   id: string;
@@ -51,7 +78,7 @@ function rowToProvider(row: any): AiProvider {
     name: row.name,
     type: row.type,
     baseUrl: row.base_url,
-    apiKey: row.api_key || '',
+    apiKey: decryptApiKey(row.api_key || ''),
     createdAt: row.created_at,
   };
 }
@@ -127,11 +154,12 @@ export function getEnabledModelsOrdered(): AiModel[] {
 
 export function saveProvider(input: any): AiProvider {
   const db = getDb();
+  const encryptedKey = encryptApiKey(input.apiKey || '');
   const isUpdate = input.id && getProviderById(input.id);
   if (isUpdate) {
     db.run(
       'UPDATE ai_providers SET name = ?, type = ?, base_url = ?, api_key = ? WHERE id = ?',
-      [input.name, input.type, input.baseUrl, input.apiKey || '', input.id]
+      [input.name, input.type, input.baseUrl, encryptedKey, input.id]
     );
     saveDb();
     return getProviderById(input.id)!;
@@ -139,7 +167,7 @@ export function saveProvider(input: any): AiProvider {
   const id = input.id || uuidv4();
   db.run(
     'INSERT INTO ai_providers (id, name, type, base_url, api_key, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, input.name, input.type, input.baseUrl, input.apiKey || '', new Date().toISOString()]
+    [id, input.name, input.type, input.baseUrl, encryptedKey, new Date().toISOString()]
   );
   saveDb();
   return getProviderById(id)!;
