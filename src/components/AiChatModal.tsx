@@ -257,8 +257,13 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
       return sum + len;
     }, 0);
     const usedK = Math.round(usedChars / 1024);
-    const ratio = effectiveMaxK > 0 ? Math.min(usedK / effectiveMaxK, 1) : 0;
-    return { usedK, maxK: effectiveMaxK, ratio };
+    const ratio = maxK > 0 ? Math.min(usedK / maxK, 1) : 0;
+    // 颜色阈值：超过有效窗口→红，超过有效窗口-13K（压缩缓冲）→黄，否则→蓝
+    const warnK = Math.max(effectiveMaxK - 13, 0);
+    const color = (effectiveMaxK > 0 && usedK >= effectiveMaxK) ? '#ff3b30'
+      : (warnK > 0 && usedK >= warnK) ? '#ff9500'
+      : 'var(--accent)';
+    return { usedK, maxK, ratio, color };
   })();
 
   const send = async () => {
@@ -736,7 +741,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
                         <circle cx="12" cy="12" r="9" fill="none" stroke="var(--border-input)" strokeWidth="2" />
                         <circle
                           cx="12" cy="12" r="9" fill="none"
-                          stroke={contextInfo.ratio > 0.85 ? '#ff3b30' : contextInfo.ratio > 0.6 ? '#ff9500' : 'var(--accent)'}
+                          stroke={contextInfo.color}
                           strokeWidth="2"
                           strokeDasharray={`${contextInfo.ratio * 56.5} 56.5`}
                           strokeLinecap="round"
