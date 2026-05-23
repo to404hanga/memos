@@ -42,12 +42,15 @@ export function useMemos() {
     window.api.getTags().then(setAllTags);
     const interval = setInterval(loadMemos, 60000);
 
-    window.api.onMemosChanged(() => {
+    const cleanupMemosChanged = window.api.onMemosChanged(() => {
       loadMemos();
       window.api.getTags().then(setAllTags);
     });
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      cleanupMemosChanged?.();
+    };
   }, [loadMemos]);
 
   const handleSearchChange = (value: string) => {

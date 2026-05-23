@@ -41,10 +41,11 @@ export default function App(): React.ReactElement {
 
   // 提醒事件
   React.useEffect(() => {
-    window.api.onReminder((data: ReminderData) => {
+    const cleanup = window.api.onReminder((data: ReminderData) => {
       setReminder(data);
       memo.loadMemos();
     });
+    return cleanup;
   }, []);
 
   const handleAdd = async (data: MemoFormData) => {

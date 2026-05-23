@@ -66,9 +66,13 @@ contextBridge.exposeInMainWorld('api', {
   aiDeleteConversation: (id) => ipcRenderer.invoke('ai-delete-conversation', id),
   aiClearConversations: () => ipcRenderer.invoke('ai-clear-conversations'),
   onReminder: (callback) => {
-    ipcRenderer.on('reminder-triggered', (_, data) => callback(data));
+    const handler = (_, data) => callback(data);
+    ipcRenderer.on('reminder-triggered', handler);
+    return () => ipcRenderer.removeListener('reminder-triggered', handler);
   },
   onMemosChanged: (callback) => {
-    ipcRenderer.on('memos-changed', () => callback());
+    const handler = () => callback();
+    ipcRenderer.on('memos-changed', handler);
+    return () => ipcRenderer.removeListener('memos-changed', handler);
   },
 });
