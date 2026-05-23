@@ -19,11 +19,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { app } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
-import { getDb, saveDb } from '../database';
-import { getAllMemos, getTrashMemos, getMemoById, insertMemo, updateMemoInDb, searchMemos, Memo } from '../database/memo.repo';
+import { getAllMemos, getTrashMemos, searchMemos } from '../database/memo.repo';
 import { getTags, addTag, updateTag, deleteTag } from '../database/settings.repo';
-import { scheduleReminder, clearMemoTimers } from '../scheduler';
 import { testWebhook } from '../webhook';
+import { createMemo, updateMemo, deleteMemo, restoreMemo, permanentDeleteMemo, emptyTrash, toggleComplete, togglePin } from '../services/memo.service';
 
 export function registerMemoIpc(mainWindow: BrowserWindow | null): void {
   ipcMain.handle('get-memos', () => getAllMemos());
@@ -124,85 +123,37 @@ export function registerMemoIpc(mainWindow: BrowserWindow | null): void {
   });
 
   ipcMain.handle('add-memo', (_, memo: any) => {
-    const newMemo: Memo = {
-      id: uuidv4(),
-      title: memo.title,
-      content: memo.content || '',
-      reminderTime: memo.reminderTime || null,
-      recurrence: memo.recurrence || null,
-      reminders: memo.reminders || [],
-      mutePeriods: memo.mutePeriods || [],
-      attachments: memo.attachments || [],
-      webhook: memo.webhook || null,
-      completed: false,
-      pinned: false,
-      tags: memo.tags || [],
-      createdAt: new Date().toISOString(),
-      deletedAt: null,
-    };
-    insertMemo(newMemo);
-    scheduleReminder(newMemo, mainWindow);
-    return newMemo;
+    return createMemo(memo, mainWindow);
   });
 
   ipcMain.handle('update-memo', (_, updatedMemo: any) => {
-    const existing = getMemoById(updatedMemo.id);
-    if (!existing) return null;
-    const merged = { ...existing, ...updatedMemo };
-    updateMemoInDb(merged);
-    scheduleReminder(merged, mainWindow);
-    return merged;
+    return updateMemo(updatedMemo, mainWindow);
   });
 
   ipcMain.handle('delete-memo', (_, id: string) => {
-    const db = getDb();
-    db.run('UPDATE memos SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), id]);
-    saveDb();
-    clearMemoTimers(id);
-    return true;
+    return deleteMemo(id);
   });
 
   ipcMain.handle('get-trash', () => getTrashMemos());
 
   ipcMain.handle('restore-memo', (_, id: string) => {
-    const db = getDb();
-    db.run('UPDATE memos SET deleted_at = NULL WHERE id = ?', [id]);
-    saveDb();
-    const memo = getMemoById(id);
-    if (memo) scheduleReminder(memo, mainWindow);
-    return memo;
+    return restoreMemo(id, mainWindow);
   });
 
   ipcMain.handle('permanent-delete', (_, id: string) => {
-    const db = getDb();
-    db.run('DELETE FROM memos WHERE id = ?', [id]);
-    saveDb();
-    return true;
+    return permanentDeleteMemo(id);
   });
 
   ipcMain.handle('empty-trash', () => {
-    const db = getDb();
-    db.run('DELETE FROM memos WHERE deleted_at IS NOT NULL');
-    saveDb();
-    return true;
+    return emptyTrash();
   });
 
   ipcMain.handle('toggle-complete', (_, id: string) => {
-    const memo = getMemoById(id);
-    if (!memo) return null;
-    memo.completed = !memo.completed;
-    updateMemoInDb(memo);
-    if (memo.completed) clearMemoTimers(id);
-    else scheduleReminder(memo, mainWindow);
-    return memo;
+    return toggleComplete(id, mainWindow);
   });
 
   ipcMain.handle('toggle-pin', (_, id: string) => {
-    const memo = getMemoById(id);
-    if (!memo) return null;
-    memo.pinned = !memo.pinned;
-    updateMemoInDb(memo);
-    return memo;
+    return togglePin(id);
   });
 
   // 标签管理
