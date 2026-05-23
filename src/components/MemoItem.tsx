@@ -145,7 +145,7 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete, onPin, onSe
                 <MarkdownView content={memo.content} />
               </div>
             ) : (
-              <p className="memo-desc">{memo.content.replace(/[#*`!\[\]()]/g, '').substring(0, 60)}{memo.content.length > 60 ? '...' : ''}</p>
+              <p className="memo-desc">{memo.content.replace(/[#*`!\[\]()]/g, '').substring(0, 60)}{(memo.content.length > 60) ? '...' : ''}</p>
             )
           )}
           {hasRichContent && (
