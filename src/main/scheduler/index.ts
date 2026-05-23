@@ -1,47 +1,25 @@
 /**
- * 提醒调度器
+ * 提醒调度器（单 Timer 策略）
  *
- * 负责备忘录提醒的定时触发，核心特性：
+ * 采用"最近一次提醒"策略：
+ * - 只维护一个全局 setTimeout，指向最近的下一次提醒时间
+ * - timer 触发时，扫描所有到期/过期的提醒，批量通知
+ * - 处理完后计算下一个最近的提醒时间，重新注册 timer
+ * - 新增/更新/删除备忘录时调用 reschedule() 重新计算
+ * - 系统唤醒时自动检查是否有错过的提醒
  *
- * 1. 多提醒支持：一个备忘录可设置多个不同类型的提醒，每个独立调度
- *
- * 2. 周期提醒类型：
- *    - once: 单次提醒（到时触发后不再重复）
- *    - daily: 每天指定时间
- *    - workday: 工作日（跳过周末和法定假日）
- *    - weekly: 每周指定星期几
- *    - monthly: 每月指定日期
- *
- * 3. 中国法定假日日历：
- *    - holidays: 法定假日集合（元旦/春节/清明/五一/端午/中秋/国庆）
- *    - workdays: 调休补班日集合
- *    - isWorkday(): 综合判断某天是否为工作日
- *    - 覆盖 2025-2027 年数据
- *
- * 4. 静默期处理：
- *    - 周期提醒在静默期内会自动跳过（向后推迟，最多 60 天）
- *    - 单次提醒在静默期内直接跳过不触发
- *
- * 5. 触发行为：
- *    - 系统通知（Notification）
- *    - 主窗口弹窗（IPC 推送 reminder-triggered 事件）
- *    - 企微 Webhook 推送（如已配置）
- *    - 周期提醒触发后自动重新调度下一次
- *
- * 6. 定时器管理：
- *    - activeTimers Map 维护每个备忘录的定时器列表
- *    - scheduleReminder: 注册提醒（先清除旧定时器）
- *    - clearMemoTimers: 清除指定备忘录的所有定时器
- *    - loadAllReminders: 应用启动时为所有未完成备忘录注册提醒
+ * 复杂度从 O(n) 个定时器降为 O(1)
  */
 import { Memo, getAllMemos, getMemoById, updateMemoInDb } from '../database/memo.repo';
 import { updateReminderTime } from '../database/memo.repo';
-import { Notification, BrowserWindow } from 'electron';
+import { Notification, BrowserWindow, powerMonitor } from 'electron';
 import { sendWebhook } from '../webhook';
 
-const activeTimers = new Map<string, NodeJS.Timeout[]>();
+let globalTimer: NodeJS.Timeout | null = null;
+let nextFireTime: number | null = null;
+let mainWindowRef: BrowserWindow | null = null;
 
-// 中国法定假日和调休日历
+// ===== 中国法定假日和调休日历 =====
 const cnCalendar = {
   holidays: new Set([
     // 2025
@@ -60,11 +38,8 @@ const cnCalendar = {
     '2027-10-01', '2027-10-02', '2027-10-03', '2027-10-04', '2027-10-05', '2027-10-06', '2027-10-07',
   ]),
   workdays: new Set([
-    // 2025 调休补班
     '2025-01-26', '2025-02-08', '2025-04-27', '2025-09-28', '2025-10-11',
-    // 2026 调休补班
     '2026-02-14', '2026-02-15', '2026-04-26', '2026-05-09', '2026-09-19', '2026-10-10',
-    // 2027 调休补班
     '2027-02-20', '2027-10-09',
   ]),
 };
@@ -83,6 +58,8 @@ function isWorkday(date: Date): boolean {
   const day = date.getDay();
   return day !== 0 && day !== 6;
 }
+
+// ===== 计算单条提醒的下次触发时间 =====
 
 function getNextOccurrence(recurrence: any): Date | null {
   if (!recurrence || recurrence.type === 'once') return null;
@@ -109,7 +86,7 @@ function getNextOccurrence(recurrence: any): Date | null {
   }
 
   if (type === 'weekly') {
-    const dayOfWeek = recurrence.dayOfWeek ?? 1; // 默认周一
+    const dayOfWeek = recurrence.dayOfWeek ?? 1;
     const next = new Date(now);
     next.setHours(hour, minute, 0, 0);
     const currentDay = now.getDay();
@@ -136,20 +113,11 @@ function getNextOccurrence(recurrence: any): Date | null {
   return null;
 }
 
-export function clearMemoTimers(memoId: string): void {
-  const timers = activeTimers.get(memoId);
-  if (timers) {
-    timers.forEach((t) => clearTimeout(t));
-    activeTimers.delete(memoId);
-  }
-}
-
-export function scheduleReminder(memo: Memo, mainWindow: BrowserWindow | null): void {
-  clearMemoTimers(memo.id);
-  if (memo.completed) return;
+/** 计算一条备忘录中所有提醒的下次触发时间列表 */
+function getMemoNextFireTimes(memo: Memo): { time: Date; reminder: any; index: number }[] {
+  if (memo.completed) return [];
 
   const mutePeriods = memo.mutePeriods || [];
-
   function isInMutePeriod(date: Date): boolean {
     const dateKey = formatDateKey(date);
     return mutePeriods.some((p: any) => dateKey >= p.from && dateKey <= p.to);
@@ -164,10 +132,7 @@ export function scheduleReminder(memo: Memo, mainWindow: BrowserWindow | null): 
     }
   }
 
-  if (reminders.length === 0) return;
-
-  const timers: NodeJS.Timeout[] = [];
-  let nearestTime: Date | null = null;
+  const results: { time: Date; reminder: any; index: number }[] = [];
 
   reminders.forEach((rem: any, idx: number) => {
     let targetDate: Date | null;
@@ -175,118 +140,197 @@ export function scheduleReminder(memo: Memo, mainWindow: BrowserWindow | null): 
     if (rem.type === 'once') {
       if (!rem.time) return;
       targetDate = new Date(rem.time);
-      if (isInMutePeriod(targetDate)) {
-        console.log(`[提醒] "${memo.title}" #${idx + 1} 在静默期内，跳过`);
-        return;
-      }
+      if (isInMutePeriod(targetDate)) return;
     } else {
       targetDate = getNextOccurrence(rem);
       if (!targetDate) return;
+      // 跳过静默期
       let attempts = 0;
-      // 跳过静默期内的日期
       while (isInMutePeriod(targetDate) && attempts < 60) {
         targetDate.setDate(targetDate.getDate() + 1);
         targetDate.setHours(rem.hour || 0, rem.minute || 0, 0, 0);
         attempts++;
       }
       if (attempts >= 60) return;
-      // 跳出静默期后，需重新校验日期是否满足周期条件
+      // 校验周期条件
       if (rem.type === 'workday') {
-        // 确保落在工作日上
-        let extraAttempts = 0;
-        while (!isWorkday(targetDate) && extraAttempts < 30) {
+        let extra = 0;
+        while (!isWorkday(targetDate) && extra < 30) {
           targetDate.setDate(targetDate.getDate() + 1);
           targetDate.setHours(rem.hour || 0, rem.minute || 0, 0, 0);
-          extraAttempts++;
+          extra++;
         }
       } else if (rem.type === 'weekly' && rem.dayOfWeek !== undefined) {
-        // 确保落在正确的星期几上
-        let extraAttempts = 0;
-        while (targetDate.getDay() !== rem.dayOfWeek && extraAttempts < 7) {
+        let extra = 0;
+        while (targetDate.getDay() !== rem.dayOfWeek && extra < 7) {
           targetDate.setDate(targetDate.getDate() + 1);
           targetDate.setHours(rem.hour || 0, rem.minute || 0, 0, 0);
-          extraAttempts++;
+          extra++;
         }
       } else if (rem.type === 'monthly' && rem.dayOfMonth !== undefined) {
-        // 确保落在正确的日期上
         if (targetDate.getDate() !== rem.dayOfMonth) {
           targetDate.setMonth(targetDate.getMonth() + 1);
           targetDate.setDate(rem.dayOfMonth);
           targetDate.setHours(rem.hour || 0, rem.minute || 0, 0, 0);
-          // 处理月份天数不足的情况（如31号）
           if (targetDate.getDate() !== rem.dayOfMonth) {
-            targetDate.setDate(0); // 退到上月最后一天
+            targetDate.setDate(0);
           }
         }
       }
     }
 
-    const now = new Date();
-    const delay = targetDate!.getTime() - now.getTime();
-
-    if (delay > 0 && (!nearestTime || targetDate! < nearestTime)) {
-      nearestTime = targetDate;
+    if (targetDate && targetDate.getTime() > 0) {
+      results.push({ time: targetDate, reminder: rem, index: idx });
     }
-
-    const typeLabel = rem.type !== 'once' ? ` (${rem.type})` : '';
-    console.log(`[提醒] "${memo.title}" #${idx + 1} 计划于 ${targetDate!.toLocaleString()}，延迟 ${Math.round(delay / 1000)}s${typeLabel}`);
-
-    if (delay <= 0) {
-      console.log(`[提醒] "${memo.title}" #${idx + 1} 已过期，跳过`);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      console.log(`[提醒] 触发: "${memo.title}" #${idx + 1}`);
-
-      if (Notification.isSupported()) {
-        const recLabel = rem.type !== 'once' ? ' 🔁' : '';
-        const notification = new Notification({
-          title: `⏰ 备忘录提醒${recLabel}`,
-          body: memo.title,
-          subtitle: memo.content || '',
-          silent: false,
-          urgency: 'critical',
-        });
-        notification.on('click', () => {
-          mainWindow && mainWindow.show();
-        });
-        notification.show();
-      }
-
-      if (mainWindow) {
-        mainWindow.show();
-        mainWindow.focus();
-        mainWindow.webContents.send('reminder-triggered', {
-          id: memo.id,
-          title: memo.title,
-          content: memo.content,
-        });
-      }
-
-      sendWebhook(memo, rem.type).catch(() => {});
-
-      if (rem.type !== 'once') {
-        const freshMemo = getMemoById(memo.id);
-        if (freshMemo && !freshMemo.completed) {
-          scheduleReminder(freshMemo, mainWindow);
-        }
-      }
-    }, delay);
-
-    timers.push(timer);
   });
 
-  if (timers.length > 0) {
-    activeTimers.set(memo.id, timers);
+  return results;
+}
+
+// ===== 触发提醒通知 =====
+
+function fireReminder(memo: Memo, rem: any): void {
+  console.log(`[提醒] 触发: "${memo.title}" (${rem.type})`);
+
+  if (Notification.isSupported()) {
+    const recLabel = rem.type !== 'once' ? ' 🔁' : '';
+    const notification = new Notification({
+      title: `⏰ 备忘录提醒${recLabel}`,
+      body: memo.title,
+      subtitle: memo.content || '',
+      silent: false,
+      urgency: 'critical',
+    });
+    notification.on('click', () => {
+      mainWindowRef && mainWindowRef.show();
+    });
+    notification.show();
   }
 
-  if (nearestTime) {
-    updateReminderTime(memo.id, (nearestTime as Date).toISOString());
+  if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+    mainWindowRef.show();
+    mainWindowRef.focus();
+    mainWindowRef.webContents.send('reminder-triggered', {
+      id: memo.id,
+      title: memo.title,
+      content: memo.content,
+    });
+  }
+
+  sendWebhook(memo, rem.type).catch(() => {});
+}
+
+// ===== 核心调度逻辑 =====
+
+/**
+ * 扫描所有备忘录，触发已到期的提醒，注册下一个最近的 timer
+ */
+function tick(): void {
+  globalTimer = null;
+  nextFireTime = null;
+
+  const now = Date.now();
+  const memos = getAllMemos();
+  let earliest: number | null = null;
+
+  for (const memo of memos) {
+    const fireTimes = getMemoNextFireTimes(memo);
+    for (const { time, reminder } of fireTimes) {
+      const t = time.getTime();
+      if (t <= now) {
+        // 已到期：立即触发
+        fireReminder(memo, reminder);
+      } else {
+        // 未来：记录最近的
+        if (earliest === null || t < earliest) {
+          earliest = t;
+        }
+      }
+    }
+  }
+
+  // 注册下一个 timer
+  if (earliest !== null) {
+    const delay = Math.max(earliest - Date.now(), 500); // 至少 500ms 防止忙循环
+    nextFireTime = earliest;
+    globalTimer = setTimeout(tick, delay);
+    console.log(`[调度器] 下次提醒在 ${new Date(earliest).toLocaleString()}（${Math.round(delay / 1000)}s 后）`);
+  } else {
+    console.log('[调度器] 无待触发的提醒');
   }
 }
 
-export function loadAllReminders(mainWindow: BrowserWindow | null): void {
+/**
+ * 重新计算调度（新增/更新/删除备忘录后调用）
+ * 如果新的最近时间比当前 timer 更早，则重置 timer
+ */
+export function reschedule(): void {
+  const now = Date.now();
   const memos = getAllMemos();
-  memos.forEach((memo) => scheduleReminder(memo, mainWindow));
+  let earliest: number | null = null;
+
+  for (const memo of memos) {
+    const fireTimes = getMemoNextFireTimes(memo);
+    for (const { time } of fireTimes) {
+      const t = time.getTime();
+      if (t > now && (earliest === null || t < earliest)) {
+        earliest = t;
+      }
+    }
+  }
+
+  // 如果新的最近时间比当前 timer 更早（或当前无 timer），重置
+  if (earliest !== null && (nextFireTime === null || earliest < nextFireTime)) {
+    if (globalTimer) {
+      clearTimeout(globalTimer);
+      globalTimer = null;
+    }
+    const delay = Math.max(earliest - Date.now(), 500);
+    nextFireTime = earliest;
+    globalTimer = setTimeout(tick, delay);
+    console.log(`[调度器] 重新调度: 下次提醒在 ${new Date(earliest).toLocaleString()}（${Math.round(delay / 1000)}s 后）`);
+  } else if (earliest === null && globalTimer) {
+    // 无任何提醒了，清除 timer
+    clearTimeout(globalTimer);
+    globalTimer = null;
+    nextFireTime = null;
+  }
+}
+
+// ===== 兼容旧 API =====
+
+/** 注册/更新某条备忘录的提醒（兼容旧调用，内部触发 reschedule） */
+export function scheduleReminder(memo: Memo, mainWindow: BrowserWindow | null): void {
+  mainWindowRef = mainWindow;
+  // 更新 reminderTime 字段（供前端展示）
+  const fireTimes = getMemoNextFireTimes(memo);
+  if (fireTimes.length > 0) {
+    const nearest = fireTimes.reduce((a, b) => a.time < b.time ? a : b);
+    updateReminderTime(memo.id, nearest.time.toISOString());
+  }
+  reschedule();
+}
+
+/** 清除某条备忘录的提醒（兼容旧调用） */
+export function clearMemoTimers(memoId: string): void {
+  // 单 timer 策略下无需按 memo 清除，reschedule 会自然跳过已完成/已删除的
+  reschedule();
+}
+
+/** 应用启动时初始化调度器 */
+export function loadAllReminders(mainWindow: BrowserWindow | null): void {
+  mainWindowRef = mainWindow;
+
+  // 首次 tick：触发所有过期的 + 注册下一个 timer
+  tick();
+
+  // 监听系统唤醒事件，唤醒后立即检查
+  powerMonitor.on('resume', () => {
+    console.log('[调度器] 系统唤醒，重新检查提醒');
+    if (globalTimer) {
+      clearTimeout(globalTimer);
+      globalTimer = null;
+    }
+    tick();
+  });
 }
