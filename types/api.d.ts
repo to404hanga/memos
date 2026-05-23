@@ -141,10 +141,10 @@ export interface ElectronAPI {
 
   // ==================== 事件监听 ====================
 
-  /** 监听提醒事件（主进程调度器触发时通知渲染进程弹窗） */
-  onReminder: (callback: (data: ReminderData) => void) => void;
-  /** 监听备忘录数据变更事件（API Server 或其他来源修改数据时通知刷新） */
-  onMemosChanged: (callback: () => void) => void;
+  /** 监听提醒事件（主进程调度器触发时通知渲染进程弹窗），返回取消监听函数 */
+  onReminder: (callback: (data: ReminderData) => void) => () => void;
+  /** 监听备忘录数据变更事件（API Server 或其他来源修改数据时通知刷新），返回取消监听函数 */
+  onMemosChanged: (callback: () => void) => () => void;
 }
 
 /**

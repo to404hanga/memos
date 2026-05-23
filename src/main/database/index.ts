@@ -16,15 +16,15 @@
  * - 启动时自动检测并顺序执行所有未运行的迁移
  * - 向后兼容：旧数据库（无版本号）视为 version 0，从头执行所有迁移
  */
-import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
+import initSqlJs, { Database } from 'sql.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { app, safeStorage } from 'electron';
 
-let db: SqlJsDatabase | null = null;
+let db: Database | null = null;
 let dbPath = '';
 
-export function getDb(): SqlJsDatabase {
+export function getDb(): Database {
   if (!db) throw new Error('Database not initialized');
   return db;
 }
@@ -43,7 +43,7 @@ export function saveDb(): void {
 // ===== 版本化迁移系统 =====
 
 /** 迁移函数类型 */
-type Migration = (database: SqlJsDatabase) => void;
+type Migration = (database: Database) => void;
 
 /**
  * 迁移注册表：按版本号顺序排列
@@ -227,7 +227,7 @@ const migrations: Migration[] = [
 const LATEST_VERSION = migrations.length;
 
 /** 获取数据库当前版本号 */
-function getDbVersion(database: SqlJsDatabase): number {
+function getDbVersion(database: Database): number {
   try {
     const stmt = database.prepare("SELECT value FROM settings WHERE key = 'db_version'");
     if (stmt.step()) {
@@ -243,7 +243,7 @@ function getDbVersion(database: SqlJsDatabase): number {
 }
 
 /** 设置数据库版本号 */
-function setDbVersion(database: SqlJsDatabase, version: number): void {
+function setDbVersion(database: Database, version: number): void {
   database.run(
     "INSERT OR REPLACE INTO settings (key, value) VALUES ('db_version', ?)",
     [String(version)]
@@ -251,7 +251,7 @@ function setDbVersion(database: SqlJsDatabase, version: number): void {
 }
 
 /** 执行数据库迁移（含备份策略） */
-function runMigrations(database: SqlJsDatabase): void {
+function runMigrations(database: Database): void {
   const currentVersion = getDbVersion(database);
 
   if (currentVersion >= LATEST_VERSION) {
@@ -300,17 +300,17 @@ export async function initDatabase(): Promise<void> {
   let recovered = false;
 
   if (fs.existsSync(dbPath)) {
+    const buffer = fs.readFileSync(dbPath);
     try {
-      const buffer = fs.readFileSync(dbPath);
       db = new SQL.Database(buffer);
-      // 验证数据库完整性（简单查询测试）
-      db.exec("SELECT 1");
+      // 验证数据库基本可用（尝试读取 schema）
+      db.exec("SELECT name FROM sqlite_master LIMIT 1");
     } catch (err: any) {
-      console.error('[DB] 数据库文件加载失败，尝试恢复:', err.message || err);
-      // 备份损坏的文件
+      console.error('[DB] 数据库文件损坏，尝试恢复:', err.message || err);
+      // 使用已读取的 buffer 进行备份（不再从文件系统读取，防止竞态）
       const corruptPath = dbPath + '.corrupt.' + Date.now();
       try {
-        fs.copyFileSync(dbPath, corruptPath);
+        fs.writeFileSync(corruptPath, buffer);
         console.log(`[DB] 已备份损坏文件 → ${path.basename(corruptPath)}`);
       } catch (backupErr: any) {
         console.error('[DB] 备份损坏文件失败:', backupErr.message || backupErr);
