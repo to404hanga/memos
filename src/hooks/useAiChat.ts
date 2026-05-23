@@ -235,6 +235,53 @@ export function useAiChat() {
     const sid = Date.now().toString() + Math.random().toString(36).slice(2);
     activeStreamId.current = sid;
 
+    // 流式批量 flush：delta 累积在 buffer 中，每 FLUSH_INTERVAL 合并写入 state
+    const FLUSH_INTERVAL = 80; // ms
+    const streamBuffer = { contentDelta: '', thinkingDelta: '', dirty: false };
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushBuffer = () => {
+      flushTimer = null;
+      if (!streamBuffer.dirty) return;
+      const { contentDelta, thinkingDelta } = streamBuffer;
+      streamBuffer.contentDelta = '';
+      streamBuffer.thinkingDelta = '';
+      streamBuffer.dirty = false;
+
+      setMessages((prev) => {
+        const updated = [...prev];
+        const msg = { ...updated[placeholderIdx] };
+
+        if (thinkingDelta) {
+          const segments = [...(msg.thinkingSegments || [])];
+          const idx = msg.currentSegmentIdx ?? 0;
+          const isNew = segments.length <= idx;
+          if (isNew) segments.push('');
+          segments[idx] = (segments[idx] || '') + thinkingDelta;
+          msg.thinkingSegments = segments;
+          msg.thinking = segments.join('\n');
+          if (isNew) {
+            const seq = [...(msg.renderSequence || [])];
+            seq.push({ type: 'thinking', segmentIdx: idx });
+            msg.renderSequence = seq;
+          }
+        }
+
+        if (contentDelta) {
+          msg.content = (msg.content || '') + contentDelta;
+        }
+
+        updated[placeholderIdx] = msg;
+        return updated;
+      });
+    };
+
+    const scheduleFlush = () => {
+      if (!flushTimer) {
+        flushTimer = setTimeout(flushBuffer, FLUSH_INTERVAL);
+      }
+    };
+
     window.api.aiChatStream(
       {
         messages: wireMessages,
@@ -244,33 +291,16 @@ export function useAiChat() {
       (chunk) => {
         if (activeStreamId.current !== sid) return;
         if (chunk.type === 'thinking_delta') {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const msg = { ...updated[placeholderIdx] };
-            const segments = [...(msg.thinkingSegments || [])];
-            const idx = msg.currentSegmentIdx ?? 0;
-            const isNew = segments.length <= idx;
-            if (isNew) segments.push('');
-            segments[idx] = (segments[idx] || '') + (chunk.text || '');
-            msg.thinkingSegments = segments;
-            msg.thinking = segments.join('\n');
-            if (isNew) {
-              const seq = [...(msg.renderSequence || [])];
-              seq.push({ type: 'thinking', segmentIdx: idx });
-              msg.renderSequence = seq;
-            }
-            updated[placeholderIdx] = msg;
-            return updated;
-          });
+          streamBuffer.thinkingDelta += (chunk.text || '');
+          streamBuffer.dirty = true;
+          scheduleFlush();
         } else if (chunk.type === 'content_delta') {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const msg = { ...updated[placeholderIdx] };
-            msg.content = (msg.content || '') + (chunk.text || '');
-            updated[placeholderIdx] = msg;
-            return updated;
-          });
+          streamBuffer.contentDelta += (chunk.text || '');
+          streamBuffer.dirty = true;
+          scheduleFlush();
         } else if (chunk.type === 'server_tool') {
+          // 非 delta 事件：先 flush 缓冲，再立即应用
+          flushBuffer();
           const toolLabels: Record<string, string> = {
             list_memos: '查询备忘录',
             complete_memo: '标记完成',
@@ -293,6 +323,7 @@ export function useAiChat() {
             return updated;
           });
         } else if (chunk.type === 'server_tool_done') {
+          flushBuffer();
           setMessages((prev) => {
             const updated = [...prev];
             const msg = { ...updated[placeholderIdx] };
@@ -320,6 +351,9 @@ export function useAiChat() {
             return updated;
           });
         } else if (chunk.type === 'done') {
+          // 最终 flush + 清理 timer
+          if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+          flushBuffer();
           const reply = chunk.message!;
           const initStatus: Record<string, 'pending'> = {};
           (reply.toolCalls || []).forEach((tc) => { initStatus[tc.id] = 'pending'; });
@@ -346,6 +380,7 @@ export function useAiChat() {
             return latest;
           });
         } else if (chunk.type === 'error') {
+          if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
           setMessages((prev) => {
             const updated = [...prev];
             updated[placeholderIdx] = {
