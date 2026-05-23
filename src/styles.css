@@ -939,6 +939,13 @@ input, textarea, button {
   padding: 12px 16px;
 }
 
+.memo-list-sentinel {
+  text-align: center;
+  padding: 12px;
+  color: var(--text-secondary, #999);
+  font-size: 13px;
+}
+
 .memo-item {
   background: var(--card-bg);
   border-radius: 14px;

@@ -1,12 +1,14 @@
 /**
- * 备忘录列表组件
+ * 备忘录列表组件（渐进式渲染）
  *
- * 渲染备忘录项的容器组件，负责将备忘录数组映射为 MemoItem 组件列表。
- * 本身不包含筛选逻辑，接收已过滤的数据进行展示。
+ * 当列表超过 PAGE_SIZE 条时，先渲染前 PAGE_SIZE 条，
+ * 滚动到底部时自动加载更多，避免大列表一次性渲染所有 DOM。
  */
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MemoItem from './MemoItem';
 import type { Memo } from '../../types/global';
+
+const PAGE_SIZE = 50;
 
 interface MemoListProps {
   memos: Memo[];
@@ -18,9 +20,38 @@ interface MemoListProps {
 }
 
 export default function MemoList({ memos, onToggle, onEdit, onDelete, onPin, onSendToAi }: MemoListProps): React.ReactElement {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // memos 列表变化时重置分页
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [memos]);
+
+  // IntersectionObserver 监听底部哨兵元素
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, memos.length));
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [memos.length]);
+
+  const displayed = memos.slice(0, visibleCount);
+  const hasMore = visibleCount < memos.length;
+
   return (
     <div className="memo-list">
-      {memos.map((memo) => (
+      {displayed.map((memo) => (
         <MemoItem
           key={memo.id}
           memo={memo}
@@ -31,6 +62,11 @@ export default function MemoList({ memos, onToggle, onEdit, onDelete, onPin, onS
           onSendToAi={onSendToAi}
         />
       ))}
+      {hasMore && (
+        <div ref={sentinelRef} className="memo-list-sentinel">
+          <span className="memo-list-loading">加载更多...</span>
+        </div>
+      )}
     </div>
   );
 }
