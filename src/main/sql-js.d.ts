@@ -4,11 +4,6 @@ declare module 'sql.js' {
     values: any[][];
   }
 
-  interface StatementIteratorResult {
-    value: Statement;
-    done: boolean;
-  }
-
   interface Statement {
     bind(params?: any[] | Record<string, any>): boolean;
     step(): boolean;
@@ -19,7 +14,7 @@ declare module 'sql.js' {
     run(params?: any[] | Record<string, any>): void;
   }
 
-  export class Database {
+  class Database {
     constructor(data?: ArrayLike<number> | Buffer | null);
     run(sql: string, params?: any[] | Record<string, any>): Database;
     exec(sql: string, params?: any[] | Record<string, any>): QueryExecResult[];
@@ -35,8 +30,8 @@ declare module 'sql.js' {
     Database: typeof Database;
   }
 
-  export type SqlJsStatic = SqlJsStatic;
-
   function initSqlJs(config?: any): Promise<SqlJsStatic>;
+
+  export { Database, SqlJsStatic, Statement, QueryExecResult };
   export default initSqlJs;
 }
