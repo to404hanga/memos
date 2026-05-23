@@ -28,9 +28,9 @@
 import * as http from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb, saveDb } from '../database';
-import { getAllMemos, getTrashMemos, getMemoById, insertMemo, updateMemoInDb, searchMemos, Memo } from '../database/memo.repo';
-import { scheduleReminder, clearMemoTimers } from '../scheduler';
+import { getAllMemos, getTrashMemos, searchMemos } from '../database/memo.repo';
 import { BrowserWindow } from 'electron';
+import { createMemo, updateMemo, deleteMemo, restoreMemo, permanentDeleteMemo, emptyTrash, toggleComplete, togglePin } from '../services/memo.service';
 
 const CLI_PORT = 19527;
 
@@ -50,86 +50,41 @@ export function startCliServer(mainWindow: BrowserWindow | null, token?: string)
       if (!body || !body.title || typeof body.title !== 'string' || !body.title.trim()) {
         return { error: 'title 为必填字段' };
       }
-      const newMemo: Memo = {
-        id: uuidv4(),
-        title: body.title.trim(),
-        content: body.content || '',
-        reminderTime: body.reminderTime || null,
-        recurrence: body.recurrence || null,
-        reminders: body.reminders || [],
-        mutePeriods: body.mutePeriods || [],
-        attachments: body.attachments || [],
-        webhook: body.webhook || null,
-        completed: false,
-        pinned: false,
-        tags: body.tags || [],
-        createdAt: new Date().toISOString(),
-        deletedAt: null,
-      };
-      insertMemo(newMemo);
-      scheduleReminder(newMemo, mainWindow);
-      return newMemo;
+      return createMemo({ ...body, title: body.title.trim() }, mainWindow);
     },
     'PUT /api/memos': (body: any) => {
       if (!body || !body.id) return { error: 'id 为必填字段' };
-      const existing = getMemoById(body.id);
-      if (!existing) return { error: 'not found' };
-      // 白名单：仅允许修改以下字段
-      const allowed = ['title', 'content', 'reminderTime', 'recurrence', 'reminders', 'mutePeriods', 'attachments', 'webhook', 'completed', 'pinned', 'tags'];
-      for (const key of allowed) {
-        if (key in body) {
-          (existing as any)[key] = body[key];
-        }
-      }
-      updateMemoInDb(existing);
-      scheduleReminder(existing, mainWindow);
-      return existing;
+      const result = updateMemo(body, mainWindow);
+      if (!result) return { error: 'not found' };
+      return result;
     },
     'DELETE /api/memos': (body: any) => {
       if (!body || !body.id) return { error: 'id 为必填字段' };
-      const db = getDb();
-      db.run('UPDATE memos SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), body.id]);
-      saveDb();
-      clearMemoTimers(body.id);
+      deleteMemo(body.id);
       return { success: true };
     },
     'POST /api/memos/complete': (body: any) => {
-      const memo = getMemoById(body.id);
-      if (!memo) return { error: 'not found' };
-      memo.completed = !memo.completed;
-      updateMemoInDb(memo);
-      if (memo.completed) clearMemoTimers(body.id);
-      else scheduleReminder(memo, mainWindow);
-      return memo;
+      const result = toggleComplete(body.id, mainWindow);
+      if (!result) return { error: 'not found' };
+      return result;
     },
     'POST /api/memos/pin': (body: any) => {
-      const memo = getMemoById(body.id);
-      if (!memo) return { error: 'not found' };
-      memo.pinned = !memo.pinned;
-      updateMemoInDb(memo);
-      return memo;
+      const result = togglePin(body.id);
+      if (!result) return { error: 'not found' };
+      return result;
     },
     'POST /api/memos/restore': (body: any) => {
-      const db = getDb();
-      db.run('UPDATE memos SET deleted_at = NULL WHERE id = ?', [body.id]);
-      saveDb();
-      const memo = getMemoById(body.id);
-      if (memo) scheduleReminder(memo, mainWindow);
-      return memo;
+      return restoreMemo(body.id, mainWindow);
     },
     'DELETE /api/memos/permanent': (body: any) => {
       if (!body || !body.id) return { error: 'id 为必填字段' };
       if (body.confirm !== true) return { error: '永久删除需要 confirm: true 确认' };
-      const db = getDb();
-      db.run('DELETE FROM memos WHERE id = ?', [body.id]);
-      saveDb();
+      permanentDeleteMemo(body.id);
       return { success: true };
     },
     'DELETE /api/trash': (body: any) => {
       if (!body || body.confirm !== true) return { error: '清空回收站需要 confirm: true 确认' };
-      const db = getDb();
-      db.run('DELETE FROM memos WHERE deleted_at IS NOT NULL');
-      saveDb();
+      emptyTrash();
       return { success: true };
     },
     'GET /api/search': (_: any, query: any) => {
