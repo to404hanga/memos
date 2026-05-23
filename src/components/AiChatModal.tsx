@@ -217,20 +217,26 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
   // 当前选择的标签
   const selectedLabel = (() => {
     if (modelChoice === 'auto') {
-      const sorted = [...models].filter((m) => m.enabled).sort((a, b) => a.priority - b.priority);
-      const first = sorted[0];
-      if (first) {
-        const p = providers.find((x) => x.id === first.providerId);
-        const display = first.displayName || first.name;
-        return `🤖 Auto · 当前→ ${p?.name || '?'} / ${display}`;
-      }
-      return '🤖 Auto · 无可用模型';
+      return '🤖 Auto';
     }
     const m = models.find((x) => x.id === modelChoice);
     if (!m) return '🤖 Auto';
     const p = providers.find((x) => x.id === m.providerId);
     const display = m.displayName || m.name;
     return `📌 ${p?.name || '?'} / ${display}`;
+  })();
+
+  // Auto 模式悬停时显示当前使用的模型
+  const autoModelTitle = (() => {
+    if (modelChoice !== 'auto') return '切换模型';
+    const sorted = [...models].filter((m) => m.enabled).sort((a, b) => a.priority - b.priority);
+    const first = sorted[0];
+    if (first) {
+      const p = providers.find((x) => x.id === first.providerId);
+      const display = first.displayName || first.name;
+      return `当前模型: ${p?.name || '?'} / ${display}`;
+    }
+    return '无可用模型';
   })();
 
   // 上下文使用量计算（有效窗口 = maxContext - 20K 输出预留）
@@ -705,7 +711,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
               <button
                 className="ai-composer-model"
                 onClick={() => setShowModelMenu((v) => !v)}
-                title="切换模型"
+                title={autoModelTitle}
               >
                 <span className="ai-composer-model-label">{selectedLabel}</span>
                 <span className="ai-composer-model-caret">▾</span>
@@ -782,7 +788,6 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
                             <span className="ai-menu-item-main">
                               <span className="ai-menu-item-name">{display}</span>
                               {m.thinking && <span className="ai-thinking-badge">🧠</span>}
-                              {m.displayName && <span className="ai-menu-item-id"><code>{m.name}</code></span>}
                             </span>
                             {!m.enabled && <span className="hint">已禁用</span>}
                           </div>

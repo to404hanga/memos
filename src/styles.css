@@ -3926,7 +3926,8 @@ input, textarea, button {
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  max-width: calc(100% - 50px);
+  min-width: 0;
+  max-width: calc(100% - 90px);
   font-size: 12px;
   background: var(--bg-tertiary);
   border: 1px solid transparent;
@@ -3934,6 +3935,7 @@ input, textarea, button {
   border-radius: 14px;
   cursor: pointer;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
+  flex-shrink: 1;
 }
 
 .ai-composer-model:hover {
@@ -3960,12 +3962,14 @@ input, textarea, button {
   align-items: center;
   justify-content: center;
   cursor: default;
+  flex-shrink: 0;
 }
 
 .ai-composer-right {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .ai-composer-send {
