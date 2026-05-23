@@ -16,7 +16,8 @@
  * - 启动时自动检测并顺序执行所有未运行的迁移
  * - 向后兼容：旧数据库（无版本号）视为 version 0，从头执行所有迁移
  */
-import initSqlJs, { Database } from 'sql.js';
+import initSqlJs from 'sql.js';
+import type { Database } from 'sql.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { app, safeStorage } from 'electron';
