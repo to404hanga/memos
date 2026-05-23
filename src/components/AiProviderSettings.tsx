@@ -610,7 +610,7 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
                       onChange={(e) => setEditingProvider({ ...editingProvider, apiKey: e.target.value })}
                       placeholder="sk-..."
                     />
-                    <p className="hint">明文存储于本地数据库；导出时不会包含此字段</p>
+                    <p className="hint">已加密存储于本地数据库；导出时不会包含此字段</p>
                   </div>
                 )}
               </div>
