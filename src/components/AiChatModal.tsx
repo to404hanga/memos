@@ -241,13 +241,14 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
 
   // 上下文使用量计算（有效窗口 = maxContext - 20K 输出预留）
   const contextInfo = (() => {
+    const DEFAULT_CONTEXT_K = 128; // 未配置时默认 128K
     let maxK = 0;
     if (modelChoice === 'auto') {
       const sorted = [...models].filter((m) => m.enabled).sort((a, b) => a.priority - b.priority);
-      maxK = sorted[0]?.maxContext || 0;
+      maxK = sorted[0]?.maxContext || DEFAULT_CONTEXT_K;
     } else {
       const m = models.find((x) => x.id === modelChoice);
-      maxK = m?.maxContext || 0;
+      maxK = m?.maxContext || DEFAULT_CONTEXT_K;
     }
     const effectiveMaxK = Math.max(maxK - 20, 0); // 预留 20K 给输出
     const usedChars = messages.reduce((sum, m) => {

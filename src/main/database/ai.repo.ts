@@ -210,8 +210,8 @@ export function saveModel(input: any): AiModel {
   maxStmt.free();
   const id = input.id || uuidv4();
   db.run(
-    'INSERT INTO ai_models (id, provider_id, name, display_name, enabled, thinking, priority, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, input.providerId, input.name, input.displayName || null, input.enabled === false ? 0 : 1, input.thinking ? 1 : 0, max + 1, new Date().toISOString()]
+    'INSERT INTO ai_models (id, provider_id, name, display_name, enabled, thinking, max_context, priority, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [id, input.providerId, input.name, input.displayName || null, input.enabled === false ? 0 : 1, input.thinking ? 1 : 0, input.maxContext || null, max + 1, new Date().toISOString()]
   );
   saveDb();
   return getModelById(id)!;
