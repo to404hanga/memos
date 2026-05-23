@@ -5,7 +5,7 @@
  * 包括模糊查询、多条匹配时返回候选列表等逻辑。
  */
 import { BrowserWindow } from 'electron';
-import { getAllMemos, getMemoById, updateMemoInDb, Memo } from '../database/memo.repo';
+import { getAllMemos, getMemoById, updateMemoInDb, Memo, invalidateCache } from '../database/memo.repo';
 import { scheduleReminder, clearMemoTimers } from '../scheduler';
 import { saveDb, getDb } from '../database';
 
@@ -154,6 +154,7 @@ export function executeServerTool(name: string, args: any, mainWindow: BrowserWi
     const target = lookup.found;
     const db = getDb();
     db.run('UPDATE memos SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), target.id]);
+    invalidateCache();
     saveDb();
     clearMemoTimers(target.id);
     return { success: true, message: `已将「${target.title}」移入回收站 🗑️` };
