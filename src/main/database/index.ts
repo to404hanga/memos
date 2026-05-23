@@ -34,11 +34,35 @@ export function getDbPath(): string {
   return dbPath;
 }
 
-export function saveDb(): void {
+/** 同步写入数据库文件（用于进程退出、迁移等必须立即持久化的场景） */
+export function saveDbSync(): void {
   if (!db) return;
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  dirty = false;
   const data = db.export();
   const buffer = Buffer.from(data);
   fs.writeFileSync(dbPath, buffer);
+}
+
+let dirty = false;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+const SAVE_DELAY_MS = 500;
+
+/**
+ * 防抖写入数据库文件
+ * 标记 dirty 后延迟 500ms 执行，批量操作时合并为一次写入。
+ */
+export function saveDb(): void {
+  if (!db) return;
+  dirty = true;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    if (dirty) saveDbSync();
+  }, SAVE_DELAY_MS);
 }
 
 // ===== 版本化迁移系统 =====
@@ -328,7 +352,7 @@ export async function initDatabase(): Promise<void> {
   // 执行版本化迁移
   runMigrations(db);
 
-  saveDb();
+  saveDbSync();
   console.log(`[DB] SQLite 已初始化: ${dbPath} (version: ${LATEST_VERSION})`);
 
   // 通知用户数据库已恢复
@@ -347,7 +371,7 @@ export async function initDatabase(): Promise<void> {
 
 export function closeDatabase(): void {
   if (db) {
-    saveDb();
+    saveDbSync();
     db.close();
     db = null;
   }

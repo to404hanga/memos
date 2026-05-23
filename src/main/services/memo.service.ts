@@ -7,7 +7,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { BrowserWindow } from 'electron';
 import { getDb, saveDb } from '../database';
-import { getAllMemos, getTrashMemos, getMemoById, insertMemo, updateMemoInDb, searchMemos, Memo } from '../database/memo.repo';
+import { getMemoById, insertMemo, updateMemoInDb, Memo, invalidateCache } from '../database/memo.repo';
 import { scheduleReminder, clearMemoTimers } from '../scheduler';
 
 /** 创建备忘录的输入参数 */
@@ -89,6 +89,7 @@ export function updateMemo(input: UpdateMemoInput, mainWindow: BrowserWindow | n
 export function deleteMemo(id: string): boolean {
   const db = getDb();
   db.run('UPDATE memos SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), id]);
+  invalidateCache();
   saveDb();
   clearMemoTimers(id);
   return true;
@@ -100,6 +101,7 @@ export function deleteMemo(id: string): boolean {
 export function restoreMemo(id: string, mainWindow: BrowserWindow | null): Memo | null {
   const db = getDb();
   db.run('UPDATE memos SET deleted_at = NULL WHERE id = ?', [id]);
+  invalidateCache();
   saveDb();
   const memo = getMemoById(id);
   if (memo) scheduleReminder(memo, mainWindow);
@@ -112,6 +114,7 @@ export function restoreMemo(id: string, mainWindow: BrowserWindow | null): Memo 
 export function permanentDeleteMemo(id: string): boolean {
   const db = getDb();
   db.run('DELETE FROM memos WHERE id = ?', [id]);
+  invalidateCache();
   saveDb();
   return true;
 }
@@ -122,6 +125,7 @@ export function permanentDeleteMemo(id: string): boolean {
 export function emptyTrash(): boolean {
   const db = getDb();
   db.run('DELETE FROM memos WHERE deleted_at IS NOT NULL');
+  invalidateCache();
   saveDb();
   return true;
 }

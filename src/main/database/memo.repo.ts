@@ -8,7 +8,6 @@
  * - 写入：插入、更新、删除（物理删除）、更新提醒时间
  * - 清理：回收站 30 天过期自动清理、对话历史 30 天过期清理
  */
-import { v4 as uuidv4 } from 'uuid';
 import { getDb, saveDb } from './index';
 
 export interface Memo {
@@ -56,22 +55,36 @@ function rowToMemo(row: any): Memo {
   };
 }
 
+// ===== 内存缓存 =====
+let memosCache: Memo[] | null = null;
+let trashCache: Memo[] | null = null;
+
+/** 使缓存失效（所有写操作后调用） */
+export function invalidateCache(): void {
+  memosCache = null;
+  trashCache = null;
+}
+
 export function getAllMemos(): Memo[] {
+  if (memosCache) return memosCache;
   const db = getDb();
   const stmt = db.prepare('SELECT * FROM memos WHERE deleted_at IS NULL ORDER BY pinned DESC, created_at DESC');
   const rows: any[] = [];
   while (stmt.step()) rows.push(stmt.getAsObject());
   stmt.free();
-  return rows.map(rowToMemo);
+  memosCache = rows.map(rowToMemo);
+  return memosCache;
 }
 
 export function getTrashMemos(): Memo[] {
+  if (trashCache) return trashCache;
   const db = getDb();
   const stmt = db.prepare('SELECT * FROM memos WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC');
   const rows: any[] = [];
   while (stmt.step()) rows.push(stmt.getAsObject());
   stmt.free();
-  return rows.map(rowToMemo);
+  trashCache = rows.map(rowToMemo);
+  return trashCache;
 }
 
 export function getMemoById(id: string): Memo | null {
@@ -93,6 +106,7 @@ export function insertMemo(memo: Memo): void {
     'INSERT INTO memos (id, title, content, reminder_time, recurrence, completed, pinned, tags, reminders, mute_periods, attachments, webhook, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [memo.id, memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), JSON.stringify(memo.attachments || []), memo.webhook ? JSON.stringify(memo.webhook) : null, memo.createdAt]
   );
+  invalidateCache();
   saveDb();
 }
 
@@ -102,18 +116,21 @@ export function updateMemoInDb(memo: Memo): void {
     'UPDATE memos SET title = ?, content = ?, reminder_time = ?, recurrence = ?, completed = ?, pinned = ?, tags = ?, reminders = ?, mute_periods = ?, attachments = ?, webhook = ? WHERE id = ?',
     [memo.title, memo.content || '', memo.reminderTime || null, memo.recurrence ? JSON.stringify(memo.recurrence) : null, memo.completed ? 1 : 0, memo.pinned ? 1 : 0, JSON.stringify(memo.tags || []), JSON.stringify(memo.reminders || []), JSON.stringify(memo.mutePeriods || []), JSON.stringify(memo.attachments || []), memo.webhook ? JSON.stringify(memo.webhook) : null, memo.id]
   );
+  invalidateCache();
   saveDb();
 }
 
 export function deleteMemoFromDb(id: string): void {
   const db = getDb();
   db.run('DELETE FROM memos WHERE id = ?', [id]);
+  invalidateCache();
   saveDb();
 }
 
 export function updateReminderTime(id: string, reminderTime: string): void {
   const db = getDb();
   db.run('UPDATE memos SET reminder_time = ? WHERE id = ?', [reminderTime, id]);
+  invalidateCache();
   saveDb();
 }
 
@@ -121,6 +138,7 @@ export function cleanupOldTrash(): void {
   const db = getDb();
   const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
   db.run('DELETE FROM memos WHERE deleted_at IS NOT NULL AND deleted_at < ?', [cutoff]);
+  invalidateCache();
   saveDb();
 }
 
