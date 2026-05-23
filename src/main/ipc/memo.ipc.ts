@@ -52,6 +52,9 @@ export function registerMemoIpc(mainWindow: BrowserWindow | null): void {
   });
 
   ipcMain.handle('save-dropped-image', (_, srcPath: string) => {
+    // 安全校验：确保源路径是真实文件且非目录
+    if (!srcPath || !fs.existsSync(srcPath) || !fs.statSync(srcPath).isFile()) return null;
+
     const ext = path.extname(srcPath).toLowerCase();
     const allowed = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'];
     if (!allowed.includes(ext)) return null;
@@ -93,7 +96,9 @@ export function registerMemoIpc(mainWindow: BrowserWindow | null): void {
   });
 
   ipcMain.handle('save-dropped-file', (_, srcPath: string) => {
-    if (!fs.existsSync(srcPath)) return null;
+    // 安全校验：确保源路径是真实文件且非目录
+    if (!srcPath || !fs.existsSync(srcPath) || !fs.statSync(srcPath).isFile()) return null;
+
     const originalName = path.basename(srcPath);
     const ext = path.extname(srcPath);
     const fileName = `${uuidv4()}${ext}`;
@@ -108,8 +113,14 @@ export function registerMemoIpc(mainWindow: BrowserWindow | null): void {
   });
 
   ipcMain.handle('open-attachment', (_, filePath: string) => {
+    // 安全校验：仅允许打开 attachments 目录下的文件
+    const attachDir = path.join(app.getPath('userData'), 'attachments');
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(attachDir)) return null;
+    if (!fs.existsSync(resolved)) return null;
+
     const { shell } = require('electron');
-    shell.openPath(filePath);
+    shell.openPath(resolved);
   });
 
   ipcMain.handle('add-memo', (_, memo: any) => {
