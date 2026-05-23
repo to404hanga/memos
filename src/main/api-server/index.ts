@@ -181,16 +181,28 @@ export function startCliServer(mainWindow: BrowserWindow | null, token?: string)
 
     if (req.method === 'GET') {
       const query = Object.fromEntries(url.searchParams);
-      const result = handler(null, query);
-      res.end(JSON.stringify(result));
+      try {
+        const result = handler(null, query);
+        res.end(JSON.stringify(result));
+      } catch (err: any) {
+        console.error(`[CLI Server] ${routeKey} 错误:`, err.message || err);
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err.message || 'Internal Server Error' }));
+      }
     } else {
       let data = '';
       req.on('data', (chunk) => { data += chunk; });
       req.on('end', () => {
         let body: any = {};
         try { body = JSON.parse(data); } catch (e) {}
-        const result = handler(body);
-        res.end(JSON.stringify(result));
+        try {
+          const result = handler(body);
+          res.end(JSON.stringify(result));
+        } catch (err: any) {
+          console.error(`[CLI Server] ${routeKey} 错误:`, err.message || err);
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: err.message || 'Internal Server Error' }));
+        }
       });
     }
   });

@@ -28,20 +28,29 @@ export interface Memo {
   deletedAt: string | null;
 }
 
+function safeJsonParse<T>(str: string | null | undefined, fallback: T): T {
+  if (!str) return fallback;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+}
+
 function rowToMemo(row: any): Memo {
   return {
     id: row.id,
     title: row.title,
     content: row.content || '',
     reminderTime: row.reminder_time || null,
-    recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,
-    reminders: row.reminders ? JSON.parse(row.reminders) : [],
-    mutePeriods: row.mute_periods ? JSON.parse(row.mute_periods) : [],
-    attachments: row.attachments ? JSON.parse(row.attachments) : [],
-    webhook: row.webhook ? JSON.parse(row.webhook) : null,
+    recurrence: safeJsonParse(row.recurrence, null),
+    reminders: safeJsonParse(row.reminders, []),
+    mutePeriods: safeJsonParse(row.mute_periods, []),
+    attachments: safeJsonParse(row.attachments, []),
+    webhook: safeJsonParse(row.webhook, null),
     completed: row.completed === 1,
     pinned: row.pinned === 1,
-    tags: row.tags ? JSON.parse(row.tags) : [],
+    tags: safeJsonParse(row.tags, []),
     createdAt: row.created_at,
     deletedAt: row.deleted_at || null,
   };
