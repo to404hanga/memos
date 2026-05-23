@@ -35,14 +35,14 @@ export default function App(): React.ReactElement {
   const [aiDraft, setAiDraft] = useState<MemoFormData | null>(null);
   const [aiAttachedMemo, setAiAttachedMemo] = useState<Memo | null>(null);
   const aiInputKey = useRef(0);
-  const [reminder, setReminder] = useState<ReminderData | null>(null);
+  const [reminders, setReminders] = useState<ReminderData[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // 提醒事件
+  // 提醒事件（队列模式，支持同时刻多条提醒）
   React.useEffect(() => {
     const cleanup = window.api.onReminder((data: ReminderData) => {
-      setReminder(data);
+      setReminders((prev) => [...prev, data]);
       memo.loadMemos();
     });
     return cleanup;
@@ -268,14 +268,23 @@ export default function App(): React.ReactElement {
         />
       )}
 
-      {reminder && (
-        <div className="reminder-overlay" onClick={() => setReminder(null)}>
+      {reminders.length > 0 && (
+        <div className="reminder-overlay" onClick={() => setReminders([])}>
           <div className="reminder-popup" onClick={(e) => e.stopPropagation()}>
             <div className="reminder-icon-large">⏰</div>
             <h2>提醒时间到！</h2>
-            <h3>{reminder.title}</h3>
-            {reminder.content && <p className="reminder-content">{reminder.content}</p>}
-            <button className="btn-submit" onClick={() => setReminder(null)}>知道了</button>
+            <div className="reminder-list">
+              {reminders.map((r, i) => (
+                <div key={`${r.id}-${i}`} className="reminder-list-item">
+                  <span className="reminder-list-bullet">•</span>
+                  <div className="reminder-list-info">
+                    <span className="reminder-list-title">{r.title}</span>
+                    {r.content && <span className="reminder-list-content">{r.content}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button className="btn-submit" onClick={() => setReminders([])}>知道了</button>
           </div>
         </div>
       )}
