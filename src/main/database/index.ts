@@ -326,24 +326,35 @@ export async function initDatabase(): Promise<void> {
 
   if (fs.existsSync(dbPath)) {
     const buffer = fs.readFileSync(dbPath);
-    try {
-      db = new SQL.Database(buffer);
-      // 验证数据库基本可用（尝试读取 schema）
-      db.exec("SELECT name FROM sqlite_master LIMIT 1");
-    } catch (err: any) {
-      console.error('[DB] 数据库文件损坏，尝试恢复:', err.message || err);
-      // 使用已读取的 buffer 进行备份（不再从文件系统读取，防止竞态）
-      const corruptPath = dbPath + '.corrupt.' + Date.now();
+    // 仅在文件非空时尝试加载（空文件视为新数据库）
+    if (buffer.length > 0) {
       try {
-        fs.writeFileSync(corruptPath, buffer);
-        console.log(`[DB] 已备份损坏文件 → ${path.basename(corruptPath)}`);
-      } catch (backupErr: any) {
-        console.error('[DB] 备份损坏文件失败:', backupErr.message || backupErr);
+        db = new SQL.Database(buffer);
+        // 验证数据库基本可用
+        db.exec("SELECT name FROM sqlite_master LIMIT 1");
+      } catch (err: any) {
+        console.error('[DB] 数据库文件加载失败:', err.message || err);
+        // 保留原文件不动！重命名为 .damaged 而非覆盖
+        const damagedPath = dbPath + '.damaged.' + Date.now();
+        try {
+          fs.renameSync(dbPath, damagedPath);
+          console.log(`[DB] 已将原文件重命名为 ${path.basename(damagedPath)}（原文件完整保留）`);
+        } catch (renameErr: any) {
+          // rename 失败则 copy 一份备份，原文件仍保留
+          try {
+            fs.writeFileSync(damagedPath, buffer);
+            console.log(`[DB] 已备份原文件 → ${path.basename(damagedPath)}`);
+          } catch (copyErr: any) {
+            console.error('[DB] 备份失败:', copyErr.message);
+          }
+        }
+        db = new SQL.Database();
+        recovered = true;
+        console.log('[DB] 已创建新的空数据库');
       }
-      // 创建全新空数据库
+    } else {
+      // 文件存在但为空（可能上次写入中断）
       db = new SQL.Database();
-      recovered = true;
-      console.log('[DB] 已创建新的空数据库');
     }
   } else {
     db = new SQL.Database();
@@ -362,8 +373,8 @@ export async function initDatabase(): Promise<void> {
       dialog.showMessageBox({
         type: 'warning',
         title: '数据库恢复',
-        message: '数据库文件损坏，已自动创建新数据库。',
-        detail: '损坏的数据库文件已备份（.corrupt 后缀），如需恢复数据请联系技术支持。',
+        message: '数据库文件无法加载，已创建新数据库。',
+        detail: '原数据库文件已保留（.damaged 后缀），未被覆盖或删除。如需恢复数据请联系技术支持。',
       }).catch(() => {});
     });
   }
