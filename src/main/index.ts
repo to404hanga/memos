@@ -87,10 +87,17 @@ function createTray(): void {
 }
 
 app.whenReady().then(async () => {
-  // 注册 local-file:// 协议处理本地文件（图片等）
+  // 注册 local-file:// 协议处理本地文件（图片/附件）
+  // 安全措施：仅允许访问 images/ 和 attachments/ 目录
+  const imagesDir = path.join(userDataPath, 'images');
+  const attachmentsDir = path.join(userDataPath, 'attachments');
   protocol.handle('local-file', (request) => {
     const filePath = decodeURIComponent(request.url.replace('local-file://', ''));
-    return net.fetch('file://' + filePath);
+    const resolved = path.resolve(filePath);
+    if (!resolved.startsWith(imagesDir) && !resolved.startsWith(attachmentsDir)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    return net.fetch('file://' + resolved);
   });
 
   // 写入 CLI token
