@@ -1,7 +1,7 @@
 {
   "name": "memo-reminder",
   "productName": "备忘录",
-  "version": "1.0.0",
+  "version": "1.0.1-beta.0",
   "description": "桌面备忘录提醒应用",
   "main": "dist/main/index.js",
   "bin": {
@@ -74,12 +74,18 @@
     ],
     "mac": {
       "icon": "assets/icon.icns",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.productivity"
     },
     "win": {
       "icon": "assets/icon.ico",
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -88,7 +94,10 @@
     },
     "linux": {
       "icon": "assets/icon.png",
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Utility"
     }
   }
