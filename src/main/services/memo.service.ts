@@ -56,7 +56,7 @@ export function createMemo(input: CreateMemoInput, mainWindow: BrowserWindow | n
     webhook: input.webhook || null,
     completed: false,
     pinned: false,
-    tags: input.tags || [],
+    tags: [...new Set(input.tags || [])],
     createdAt: new Date().toISOString(),
     deletedAt: null,
   };
@@ -77,6 +77,11 @@ export function updateMemo(input: UpdateMemoInput, mainWindow: BrowserWindow | n
     if (key in input && key !== 'id') {
       (existing as any)[key] = (input as any)[key];
     }
+  }
+
+  // 标签去重（按标签名）
+  if (Array.isArray(existing.tags)) {
+    existing.tags = [...new Set(existing.tags)];
   }
 
   // 自动在 tags 表中创建不存在的新标签

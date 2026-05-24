@@ -178,7 +178,7 @@ export function executeServerTool(name: string, args: any, mainWindow: BrowserWi
     const changes: string[] = [];
     if (typeof args.title === 'string') { target.title = args.title; changes.push('标题'); }
     if (typeof args.content === 'string') { target.content = args.content; changes.push('内容'); }
-    if (Array.isArray(args.tags)) { target.tags = args.tags; changes.push('标签'); }
+    if (Array.isArray(args.tags)) { target.tags = [...new Set<string>(args.tags)]; changes.push('标签'); }
     else if (Array.isArray(args.addTags) && args.addTags.length > 0) {
       const existing = new Set(target.tags || []);
       args.addTags.forEach((t: string) => existing.add(t));
