@@ -1,7 +1,7 @@
 {
   "name": "memo-reminder",
   "productName": "备忘录",
-  "version": "1.0.1-beta.0",
+  "version": "1.0.1-beta.1",
   "description": "桌面备忘录提醒应用",
   "main": "dist/main/index.js",
   "bin": {
