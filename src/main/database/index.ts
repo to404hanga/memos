@@ -44,6 +44,21 @@ export function saveDbSync(): void {
   dirty = false;
   const data = db.export();
   const buffer = Buffer.from(data);
+
+  // 安全检查：如果新内容比旧文件小 50% 以上，先备份旧库再写入
+  if (dbPath && fs.existsSync(dbPath)) {
+    const existingSize = fs.statSync(dbPath).size;
+    if (existingSize > 4096 && buffer.length < existingSize * 0.5) {
+      const backupPath = dbPath + '.backup.' + Date.now();
+      try {
+        fs.copyFileSync(dbPath, backupPath);
+        console.warn(`[DB] ⚠️ 新数据 ${buffer.length}B 远小于现有 ${existingSize}B，已备份旧库 → ${path.basename(backupPath)}`);
+      } catch (e: any) {
+        console.error('[DB] 备份旧库失败:', e.message);
+      }
+    }
+  }
+
   fs.writeFileSync(dbPath, buffer);
 }
 
@@ -329,7 +344,7 @@ export async function initDatabase(): Promise<void> {
     // 仅在文件非空时尝试加载（空文件视为新数据库）
     if (buffer.length > 0) {
       try {
-        db = new SQL.Database(buffer);
+        db = new SQL.Database(buffer) as unknown as Database;
         // 验证数据库基本可用
         db.exec("SELECT name FROM sqlite_master LIMIT 1");
       } catch (err: any) {
@@ -348,20 +363,20 @@ export async function initDatabase(): Promise<void> {
             console.error('[DB] 备份失败:', copyErr.message);
           }
         }
-        db = new SQL.Database();
+        db = new SQL.Database() as unknown as Database;
         recovered = true;
         console.log('[DB] 已创建新的空数据库');
       }
     } else {
       // 文件存在但为空（可能上次写入中断）
-      db = new SQL.Database();
+      db = new SQL.Database() as unknown as Database;
     }
   } else {
-    db = new SQL.Database();
+    db = new SQL.Database() as unknown as Database;
   }
 
   // 执行版本化迁移
-  runMigrations(db);
+  runMigrations(db!);
 
   saveDbSync();
   console.log(`[DB] SQLite 已初始化: ${dbPath} (version: ${LATEST_VERSION})`);

@@ -21,8 +21,8 @@ import { loadAllReminders } from './scheduler';
 import { startCliServer } from './api-server';
 
 // 必须在 ready 之前设置
-app.name = '备忘录';
-// 跨平台 userData 路径（macOS: ~/Library/Application Support/备忘录, Windows: %APPDATA%/备忘录, Linux: ~/.config/备忘录）
+app.name = 'MemoReminder';
+// 跨平台 userData 路径（macOS: ~/Library/Application Support/MemoReminder, Windows: %APPDATA%/MemoReminder, Linux: ~/.config/MemoReminder）
 const userDataPath = app.getPath('userData');
 
 // 生成 CLI API Token（每次启动随机生成，写入文件供 CLI 读取）
@@ -32,19 +32,19 @@ const tokenPath = path.join(userDataPath, '.cli-token');
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
-// 平台适配图标：macOS 用 .icns，Windows 用 .ico，其他用 .png
-function getIconPath(): string {
-  const assetsDir = path.join(__dirname, '..', '..', 'assets');
-  if (process.platform === 'darwin') {
-    const icns = path.join(assetsDir, 'icon.icns');
-    if (fs.existsSync(icns)) return icns;
-  } else if (process.platform === 'win32') {
+// 平台适配图标
+const assetsDir = path.join(__dirname, '..', '..', 'assets');
+// 窗口/dock 图标：macOS 用 .icns，Windows 用 .ico，其他用 .png
+function getWindowIconPath(): string {
+  if (process.platform === 'win32') {
     const ico = path.join(assetsDir, 'icon.ico');
     if (fs.existsSync(ico)) return ico;
   }
   return path.join(assetsDir, 'icon.png');
 }
-const iconPath = getIconPath();
+// nativeImage 图标（托盘等）：统一用 .png（nativeImage 不支持 .icns/.ico）
+const iconPath = path.join(assetsDir, 'icon.png');
+const windowIconPath = getWindowIconPath();
 
 // 注册自定义 protocol 处理本地文件访问
 protocol.registerSchemesAsPrivileged([
@@ -58,7 +58,7 @@ function createWindow(): void {
     minWidth: 600,
     minHeight: 420,
     title: '备忘录',
-    icon: iconPath,
+    icon: windowIconPath,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
     backgroundColor: '#f5f5f7',
@@ -115,7 +115,7 @@ app.whenReady().then(async () => {
 
   if (process.platform === 'darwin') {
     app.dock.setIcon(iconPath);
-    app.setName('备忘录');
+    app.setName('MemoReminder');
   }
 
   await initDatabase();
