@@ -35,11 +35,31 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete, onPin, onSe
   const [showConfirm, setShowConfirm] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const contextMenuRef = React.useRef<HTMLDivElement>(null);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
   };
+
+  // 边界检测：渲染后如果菜单超出视口则调整位置
+  React.useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const el = contextMenuRef.current;
+    const rect = el.getBoundingClientRect();
+    let { x, y } = contextMenu;
+    if (rect.right > window.innerWidth) {
+      x = window.innerWidth - rect.width - 8;
+    }
+    if (rect.bottom > window.innerHeight) {
+      y = window.innerHeight - rect.height - 8;
+    }
+    if (x < 0) x = 8;
+    if (y < 0) y = 8;
+    if (x !== contextMenu.x || y !== contextMenu.y) {
+      setContextMenu({ x, y });
+    }
+  }, [contextMenu]);
 
   const closeContextMenu = () => setContextMenu(null);
 
@@ -101,7 +121,7 @@ export default function MemoItem({ memo, onToggle, onEdit, onDelete, onPin, onSe
       {contextMenu && (
         <>
           <div className="context-menu-overlay" onClick={closeContextMenu} />
-          <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
+          <div className="context-menu" ref={contextMenuRef} style={{ top: contextMenu.y, left: contextMenu.x }}>
             {onSendToAi && (
               <div className="context-menu-item" onClick={() => { onSendToAi(memo); closeContextMenu(); }}>
                 <span className="context-menu-icon">🤖</span>发送到 AI 对话
