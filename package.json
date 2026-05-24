@@ -17,9 +17,7 @@
     "adm-zip": "^0.5.17",
     "commander": "^14.0.3",
     "dompurify": "^3.4.5",
-    "electron-store": "^8.1.0",
     "marked": "^18.0.3",
-    "node-cron": "^3.0.3",
     "sql.js": "^1.14.1",
     "uuid": "^9.0.0"
   },
