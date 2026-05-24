@@ -95,8 +95,7 @@
     "linux": {
       "icon": "assets/icon.png",
       "target": [
-        "AppImage",
-        "deb"
+        "AppImage"
       ],
       "category": "Utility"
     }
