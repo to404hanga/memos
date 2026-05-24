@@ -20,7 +20,7 @@
  * - 静默期内的提醒不显示
  * - 已完成的只显示在原始提醒日期
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { Memo } from '../../types/global';
 
 interface CalendarViewProps {
@@ -33,11 +33,21 @@ function formatKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-const todayKey = formatKey(new Date());
-
 export default function CalendarView({ memos, onEdit, onToggle }: CalendarViewProps): React.ReactElement {
+  const [todayKey, setTodayKey] = useState(() => formatKey(new Date()));
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string>(todayKey);
+
+  // 每分钟检测日期是否变更
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const newKey = formatKey(new Date());
+      if (newKey !== todayKey) {
+        setTodayKey(newKey);
+      }
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [todayKey]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
