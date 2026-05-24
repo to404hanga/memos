@@ -12,7 +12,6 @@
  */
 import { app, BrowserWindow, Tray, Menu, nativeImage, protocol, net } from 'electron';
 import * as path from 'path';
-import * as os from 'os';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { initDatabase, closeDatabase } from './database';
@@ -23,9 +22,8 @@ import { startCliServer } from './api-server';
 
 // 必须在 ready 之前设置
 app.name = '备忘录';
-// 确保 userData 路径与旧版本一致（macOS: ~/Library/Application Support/备忘录）
-const userDataPath = path.join(os.homedir(), 'Library', 'Application Support', '备忘录');
-app.setPath('userData', userDataPath);
+// 跨平台 userData 路径（macOS: ~/Library/Application Support/备忘录, Windows: %APPDATA%/备忘录, Linux: ~/.config/备忘录）
+const userDataPath = app.getPath('userData');
 
 // 生成 CLI API Token（每次启动随机生成，写入文件供 CLI 读取）
 const cliToken = crypto.randomBytes(16).toString('hex');
@@ -34,7 +32,19 @@ const tokenPath = path.join(userDataPath, '.cli-token');
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
-const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.png');
+// 平台适配图标：macOS 用 .icns，Windows 用 .ico，其他用 .png
+function getIconPath(): string {
+  const assetsDir = path.join(__dirname, '..', '..', 'assets');
+  if (process.platform === 'darwin') {
+    const icns = path.join(assetsDir, 'icon.icns');
+    if (fs.existsSync(icns)) return icns;
+  } else if (process.platform === 'win32') {
+    const ico = path.join(assetsDir, 'icon.ico');
+    if (fs.existsSync(ico)) return ico;
+  }
+  return path.join(assetsDir, 'icon.png');
+}
+const iconPath = getIconPath();
 
 // 注册自定义 protocol 处理本地文件访问
 protocol.registerSchemesAsPrivileged([
