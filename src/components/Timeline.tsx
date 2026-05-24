@@ -21,7 +21,7 @@
  * - pending: 正常等待（蓝色）
  * - no-time: 无提醒时间（灰色）
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Memo } from '../../types/global';
 
 /** 时间轴节点状态 */
@@ -34,7 +34,14 @@ interface TimelineProps {
 }
 
 export default function Timeline({ memos, onToggle, onEdit }: TimelineProps): React.ReactElement {
-  const now = new Date();
+  const [now, setNow] = useState(() => new Date());
+
+  // 每分钟更新 now，确保"今天"标签和过期状态实时正确
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   const timelineMemos = memos
     .filter((m) => m.reminderTime)
     .sort((a, b) => new Date(a.reminderTime!).getTime() - new Date(b.reminderTime!).getTime());
