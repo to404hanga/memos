@@ -27,18 +27,22 @@ on:
 # ===== 构建任务 =====
 jobs:
   build:
-    # 矩阵策略：同时在 3 个操作系统上运行，互不影响
+    # 矩阵策略：同时在多个操作系统上运行，互不影响
     strategy:
       matrix:
         include:
           - os: macos-latest    # macOS ARM64 构建机 → 产出 arm64 .dmg 和 .zip
             platform: mac
-          - os: macos-13        # macOS x64 (Intel) 构建机 → 产出 x64 .dmg 和 .zip
+            arch: arm64
+          - os: macos-latest    # macOS ARM64 构建机 → 交叉编译产出 x64 .dmg 和 .zip
             platform: mac
+            arch: x64
           - os: windows-latest  # Windows 构建机 → 产出 .exe 安装包
             platform: win
+            arch: x64
           - os: ubuntu-latest   # Linux 构建机 → 产出 .AppImage
             platform: linux
+            arch: x64
 
     # 每个矩阵项在对应的操作系统上运行
     runs-on: ${{ matrix.os }}
@@ -62,7 +66,7 @@ jobs:
       # 第4步：构建代码 + 打包为对应平台的安装包
       # GH_TOKEN 用于 electron-builder 下载 Electron 二进制文件（避免限速）
       - name: Build & Package
-        run: npm run dist:${{ matrix.platform }}
+        run: npm run build && npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -70,7 +74,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.os }}
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             release/*.dmg
             release/*.zip
