@@ -8,7 +8,7 @@
  * - AiModelSelector: 模型选择菜单
  * - AiHistoryPanel: 历史管理面板
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { aiArgsToMemo } from './AiPreviewCard';
 import AiProviderSettings from './AiProviderSettings';
 import AiMessageList from './AiMessageList';
@@ -32,6 +32,36 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
   const [showHistory, setShowHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(420);
+
+  // 拖拽调整侧边栏宽度
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarRef.current?.offsetWidth || 420;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = startX - ev.clientX;
+      const windowWidth = window.innerWidth;
+      const maxWidth = windowWidth * 0.5;
+      const minWidth = 420;
+      const newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth + delta));
+      setSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
 
   // textarea 自适应高度
   useEffect(() => {
@@ -83,7 +113,8 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
 
   return (
     <>
-      <aside className="ai-sidebar" onClick={(e) => e.stopPropagation()}>
+      <aside className="ai-sidebar" ref={sidebarRef} style={{ width: sidebarWidth }} onClick={(e) => e.stopPropagation()}>
+        <div className="ai-sidebar-resize-handle" onMouseDown={handleResizeMouseDown} />
         <div className="ai-chat-header">
           <h2>💬 AI 助手</h2>
           <div className="ai-chat-header-right">
