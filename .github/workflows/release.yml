@@ -31,11 +31,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-latest    # macOS 构建机 → 产出 .dmg 和 .zip
+          - os: macos-latest    # macOS ARM64 构建机 → 产出 arm64 .dmg 和 .zip
+            platform: mac
+          - os: macos-13        # macOS x64 (Intel) 构建机 → 产出 x64 .dmg 和 .zip
             platform: mac
           - os: windows-latest  # Windows 构建机 → 产出 .exe 安装包
             platform: win
-          - os: ubuntu-latest   # Linux 构建机 → 产出 .AppImage 和 .deb
+          - os: ubuntu-latest   # Linux 构建机 → 产出 .AppImage
             platform: linux
 
     # 每个矩阵项在对应的操作系统上运行
@@ -68,7 +70,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.platform }}
+          name: release-${{ matrix.os }}
           path: |
             release/*.dmg
             release/*.zip

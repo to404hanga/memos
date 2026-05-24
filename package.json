@@ -57,6 +57,7 @@
   "build": {
     "appId": "com.memo.reminder",
     "productName": "备忘录",
+    "artifactName": "${name}-${version}-${arch}.${ext}",
     "directories": {
       "output": "release"
     },
