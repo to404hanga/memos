@@ -11,7 +11,7 @@
     "build:main": "npx webpack --config webpack.main.config.js",
     "build:main:dev": "NODE_ENV=development npx webpack --config webpack.main.config.js",
     "build:renderer": "npx webpack build --mode production",
-    "build": "npm run build:main && npm run build:renderer",
+    "build": "npm run build:renderer && npm run build:main",
     "start": "npm run build:main && electron .",
     "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && npm run build:main:dev && DEV_SERVER=1 electron .\"",
     "pack": "npm run build && electron-builder --dir",
