@@ -41,13 +41,15 @@
 # 安装依赖
 npm install
 
-# 构建主进程 + 渲染进程，然后运行
+# 生产构建（主进程 + 渲染进程），然后运行
 npm run build:main && npx webpack build --mode production && npx electron .
 
-# 开发模式（前端热更新）
+# 开发模式（前端热更新 + 主进程 development 构建）
 npm run dev
-# 修改主进程代码后需要手动重新构建：
-npm run build:main
+
+# 单独构建主进程
+npm run build:main          # 生产模式（tree-shaking + 压缩）
+npm run build:main:dev      # 开发模式（source map，便于调试）
 
 # 注册 CLI 全局命令
 npm link
@@ -60,14 +62,21 @@ src/
 ├── main/               # Electron 主进程（TypeScript）
 │   ├── index.ts        # 入口：窗口/托盘/生命周期
 │   ├── database/       # SQLite 数据库初始化和 CRUD
-│   ├── scheduler/      # 提醒调度（含中国假日判断）
+│   ├── scheduler/      # 提醒调度（单 timer 策略 + 系统唤醒检测）
 │   ├── ai/             # AI 多模型调用引擎
+│   │   ├── tools.ts    # 工具定义
+│   │   ├── executor.ts # 服务端工具执行
+│   │   ├── compact.ts  # 上下文压缩策略
+│   │   ├── conversation.ts # 对话循环 + Provider 降级
+│   │   └── index.ts    # 对外接口
+│   ├── services/       # 业务逻辑层（IPC 和 API 共用）
 │   ├── ipc/            # IPC handler
 │   ├── api-server/     # CLI HTTP API
 │   └── webhook/        # 企微 Webhook 推送
 ├── hooks/              # React 自定义 Hooks
 │   ├── useTheme.ts     # 主题管理
-│   └── useMemos.ts     # 备忘录状态管理
+│   ├── useMemos.ts     # 备忘录状态管理
+│   └── useAiChat.ts    # AI 对话状态 + 流式处理
 ├── components/         # React 组件
 ├── styles/             # CSS 变量
 ├── App.tsx             # 主应用组件
