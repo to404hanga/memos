@@ -10,8 +10,15 @@
   "scripts": {
     "build:main": "npx webpack --config webpack.main.config.js",
     "build:main:dev": "NODE_ENV=development npx webpack --config webpack.main.config.js",
+    "build:renderer": "npx webpack build --mode production",
+    "build": "npm run build:main && npm run build:renderer",
     "start": "npm run build:main && electron .",
-    "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && npm run build:main:dev && DEV_SERVER=1 electron .\""
+    "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && npm run build:main:dev && DEV_SERVER=1 electron .\"",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
@@ -33,6 +40,7 @@
     "concurrently": "^8.2.2",
     "css-loader": "^6.10.0",
     "electron": "^28.2.0",
+    "electron-builder": "^26.8.1",
     "electron-rebuild": "^3.2.9",
     "electronmon": "^2.0.4",
     "html-webpack-plugin": "^5.6.0",
@@ -45,5 +53,43 @@
     "webpack": "^5.90.0",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.0.0"
+  },
+  "build": {
+    "appId": "com.memo.reminder",
+    "productName": "备忘录",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "preload.js",
+      "assets/**/*",
+      "node_modules/sql.js/dist/sql-wasm.wasm"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/sql.js/dist/sql-wasm.wasm",
+        "to": "sql-wasm.wasm"
+      }
+    ],
+    "mac": {
+      "icon": "assets/icon.icns",
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": ["nsis", "portable"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "备忘录"
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": ["AppImage", "deb"],
+      "category": "Utility"
+    }
   }
 }
