@@ -79,6 +79,19 @@ export function useMemos() {
   };
 
   const updateMemo = async (memo: MemoFormData) => {
+    // 标签去重
+    if (memo.tags) {
+      memo.tags = [...new Set(memo.tags)];
+    }
+    // 先将不存在的新标签创建到 tags 表中
+    if (memo.tags && memo.tags.length > 0) {
+      const existingNames = allTags.map((t) => t.name);
+      for (const tagName of memo.tags) {
+        if (!existingNames.includes(tagName)) {
+          await window.api.addTag({ name: tagName });
+        }
+      }
+    }
     await window.api.updateMemo(memo);
     await loadMemos();
     refreshTags();
@@ -143,6 +156,10 @@ export function useMemos() {
 
   // 自动创建不存在的标签并添加备忘录（用于 AI 创建）
   const addMemoWithTags = async (memo: MemoFormData) => {
+    // 标签去重
+    if (memo.tags) {
+      memo.tags = [...new Set(memo.tags)];
+    }
     if (memo.tags && memo.tags.length > 0) {
       const existingNames = allTags.map((t) => t.name);
       for (const tagName of memo.tags) {
