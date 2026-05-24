@@ -2458,6 +2458,8 @@ input, textarea, button {
 
 .ai-sidebar {
   width: 420px;
+  min-width: 420px;
+  max-width: 50vw;
   flex-shrink: 0;
   height: 100vh;
   display: flex;
@@ -2466,6 +2468,24 @@ input, textarea, button {
   border-left: 1px solid var(--border);
   overflow: hidden;
   animation: ai-sidebar-in 0.22s ease-out;
+  position: relative;
+}
+
+.ai-sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background 0.15s;
+}
+
+.ai-sidebar-resize-handle:hover,
+.ai-sidebar-resize-handle:active {
+  background: var(--accent);
+  opacity: 0.5;
 }
 
 @keyframes ai-sidebar-in {
