@@ -6,6 +6,7 @@
  */
 import { BrowserWindow } from 'electron';
 import { getAllMemos, getMemoById, updateMemoInDb, Memo, invalidateCache } from '../database/memo.repo';
+import { getTagNames, addTag } from '../database/settings.repo';
 import { scheduleReminder, clearMemoTimers } from '../scheduler';
 import { saveDb, getDb } from '../database';
 
@@ -217,6 +218,16 @@ export function executeServerTool(name: string, args: any, mainWindow: BrowserWi
 
     if (changes.length === 0) {
       return { success: true, message: `未指定任何修改字段，「${target.title}」保持不变` };
+    }
+
+    // 自动在 tags 表中创建不存在的新标签
+    if (Array.isArray(target.tags) && target.tags.length > 0) {
+      const existingTagNames = new Set(getTagNames());
+      for (const tagName of target.tags) {
+        if (tagName && !existingTagNames.has(tagName)) {
+          addTag({ name: tagName });
+        }
+      }
     }
 
     updateMemoInDb(target);

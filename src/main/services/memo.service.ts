@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { BrowserWindow } from 'electron';
 import { getDb, saveDb } from '../database';
 import { getMemoById, insertMemo, updateMemoInDb, Memo, invalidateCache } from '../database/memo.repo';
+import { getTagNames, addTag } from '../database/settings.repo';
 import { scheduleReminder, clearMemoTimers } from '../scheduler';
 
 /** 创建备忘录的输入参数 */
@@ -75,6 +76,16 @@ export function updateMemo(input: UpdateMemoInput, mainWindow: BrowserWindow | n
   for (const key of allowed) {
     if (key in input && key !== 'id') {
       (existing as any)[key] = (input as any)[key];
+    }
+  }
+
+  // 自动在 tags 表中创建不存在的新标签
+  if (Array.isArray(input.tags) && input.tags.length > 0) {
+    const existingTagNames = new Set(getTagNames());
+    for (const tagName of input.tags) {
+      if (tagName && !existingTagNames.has(tagName)) {
+        addTag({ name: tagName });
+      }
     }
   }
 
