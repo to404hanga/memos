@@ -9,8 +9,9 @@
   },
   "scripts": {
     "build:main": "npx webpack --config webpack.main.config.js",
+    "build:main:dev": "NODE_ENV=development npx webpack --config webpack.main.config.js",
     "start": "npm run build:main && electron .",
-    "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && DEV_SERVER=1 electron .\""
+    "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && npm run build:main:dev && DEV_SERVER=1 electron .\""
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
