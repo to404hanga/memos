@@ -84,7 +84,12 @@
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "备忘录需要访问麦克风以进行语音输入"
+      }
     },
     "win": {
       "icon": "assets/icon.ico",
