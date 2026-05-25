@@ -35,8 +35,10 @@ memo list -v                       # 显示内容预览
 memo list -a -v                    # 全部 + 预览
 memo search <关键词>                # 搜索备忘录（按标题和内容匹配）
 memo search <关键词> -v             # 搜索 + 预览
-memo show <id>                     # 查看详情（id 支持前缀匹配，输入前几位即可）
+memo show <id>                     # 查看详情（含标签、提醒、附件、webhook 等完整信息）
 ```
+
+> `show` 输出包括：标题、ID、完成/置顶状态、标签、提醒列表、webhook 配置、附件数、创建时间、正文内容。
 
 ### 创建
 
@@ -87,10 +89,12 @@ memo tag delete <id>               # 删除标签
 ### 导入导出
 
 ```bash
-memo export backup.json            # 导出到 JSON 文件（含备忘录 + 标签）
+memo export backup.json            # 导出到 JSON 文件（未删除的备忘录 + 标签）
 memo export                        # 导出到标准输出
 memo import backup.json            # 从 JSON 导入（已存在的 ID 会跳过）
 ```
+
+> 注意：`export` 只导出未删除的备忘录，回收站中的内容不会被导出。
 
 ## 命令别名
 
