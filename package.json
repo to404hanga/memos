@@ -25,6 +25,7 @@
     "commander": "^14.0.3",
     "dompurify": "^3.4.5",
     "marked": "^18.0.3",
+    "sherpa-onnx-node": "^1.13.2",
     "sql.js": "^1.14.1",
     "uuid": "^9.0.0"
   },
@@ -65,7 +66,11 @@
       "dist/**/*",
       "preload.js",
       "assets/**/*",
-      "node_modules/sql.js/dist/sql-wasm.wasm"
+      "node_modules/sql.js/dist/sql-wasm.wasm",
+      "node_modules/sherpa-onnx-node/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/sherpa-onnx-node/**/*"
     ],
     "extraResources": [
       {

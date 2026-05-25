@@ -139,12 +139,40 @@ export interface ElectronAPI {
   /** 清空所有对话历史 */
   aiClearConversations: () => Promise<boolean>;
 
+  // ==================== 语音识别 (ASR) ====================
+
+  /** 获取 ASR 引擎/模型状态 */
+  asrGetStatus: () => Promise<AsrStatusType>;
+  /** 识别音频数据（PCM Float32 16kHz mono） */
+  asrRecognize: (audioBuffer: ArrayBuffer) => Promise<{ success: boolean; text?: string; error?: string }>;
+  /** 预加载 ASR 模型到内存 */
+  asrPreload: () => Promise<{ success: boolean; error?: string }>;
+  /** 下载 ASR 模型文件 */
+  asrDownload: () => Promise<{ success: boolean; error?: string }>;
+  /** 取消模型下载 */
+  asrCancelDownload: () => Promise<{ success: boolean }>;
+  /** 监听模型下载进度 */
+  onAsrDownloadProgress: (callback: (progress: AsrDownloadProgress) => void) => () => void;
+
   // ==================== 事件监听 ====================
 
   /** 监听提醒事件（主进程调度器触发时通知渲染进程弹窗），返回取消监听函数 */
   onReminder: (callback: (data: ReminderData) => void) => () => void;
   /** 监听备忘录数据变更事件（API Server 或其他来源修改数据时通知刷新），返回取消监听函数 */
   onMemosChanged: (callback: () => void) => () => void;
+}
+
+// ==================== ASR 类型 ====================
+
+export type AsrStatusType = 'not_downloaded' | 'downloading' | 'idle' | 'loading' | 'ready' | 'error';
+
+export interface AsrDownloadProgress {
+  file: string;
+  fileIndex: number;
+  totalFiles: number;
+  bytesDownloaded: number;
+  totalBytes: number;
+  percent: number;
 }
 
 /**

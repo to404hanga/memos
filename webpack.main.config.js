@@ -30,6 +30,7 @@ module.exports = {
     'sql.js': 'commonjs sql.js',
     'adm-zip': 'commonjs adm-zip',
     'uuid': 'commonjs uuid',
+    'sherpa-onnx-node': 'commonjs sherpa-onnx-node',
   },
   node: {
     __dirname: false,

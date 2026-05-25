@@ -65,6 +65,17 @@ contextBridge.exposeInMainWorld('api', {
   aiSaveConversation: (conv) => ipcRenderer.invoke('ai-save-conversation', conv),
   aiDeleteConversation: (id) => ipcRenderer.invoke('ai-delete-conversation', id),
   aiClearConversations: () => ipcRenderer.invoke('ai-clear-conversations'),
+  // ASR 语音识别
+  asrGetStatus: () => ipcRenderer.invoke('asr:status'),
+  asrRecognize: (audioBuffer) => ipcRenderer.invoke('asr:recognize', audioBuffer),
+  asrPreload: () => ipcRenderer.invoke('asr:preload'),
+  asrDownload: () => ipcRenderer.invoke('asr:download'),
+  asrCancelDownload: () => ipcRenderer.invoke('asr:cancel-download'),
+  onAsrDownloadProgress: (callback) => {
+    const handler = (_, progress) => callback(progress);
+    ipcRenderer.on('asr:download-progress', handler);
+    return () => ipcRenderer.removeListener('asr:download-progress', handler);
+  },
   onReminder: (callback) => {
     const handler = (_, data) => callback(data);
     ipcRenderer.on('reminder-triggered', handler);
