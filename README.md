@@ -1,37 +1,59 @@
 # 备忘录提醒 (Memo Reminder)
 
-一个简洁美观的桌面备忘录应用，支持 Markdown 编辑、图片插入、周期提醒和时间轴视图。
+一个简洁美观的桌面备忘录应用，支持 Markdown 编辑、图片插入、周期提醒、多视图切换和 AI 助手。
 
 ## 功能
 
+### 核心
+
 - 创建、编辑、删除备忘录
 - 搜索功能：按标题/内容关键词实时搜索
-- 标签/分类：创建自定义标签，按标签筛选备忘录
+- 标签/分类：创建自定义标签（含颜色），按标签筛选备忘录
 - 置顶功能：重要备忘录置顶显示
+- 标记完成/未完成
+- 回收站：删除后可恢复，30 天后自动清理
+
+### 编辑器
+
 - 正文支持 Markdown 格式（标题、粗体、列表、代码块、引用等）
 - 实时 Markdown 编辑器：左右分栏同步编辑+预览，快捷工具栏
 - 支持插入本地图片，支持拖拽图片到编辑区
 - 附件支持：可添加 PDF、文档、压缩包等任意类型文件，支持拖拽和点击打开
-- 灵活的提醒方式：
-  - 支持同一备忘录设置多个提醒
-  - 单次提醒：指定具体日期时间
-  - 每天提醒：固定时间重复
-  - 工作日提醒：每个工作日提醒（支持中国法定假日和调休）
-  - 每周提醒：指定星期几和时间
-  - 每月提醒：指定几号和时间
+
+### 提醒
+
+- 支持同一备忘录设置多个提醒
+- 单次提醒：指定具体日期时间
+- 每天提醒：固定时间重复
+- 工作日提醒：每个工作日提醒（支持中国法定假日和调休）
+- 每周提醒：指定星期几和时间
+- 每月提醒：指定几号和时间
 - 到时桌面通知 + 应用内弹窗双重提醒
 - 周期提醒触发后自动调度下一次
 - 静默期：指定日期范围内暂停提醒（适合出差/休假）
+
+### 视图
+
+- 列表视图：按状态筛选（全部/待办/已完成）
 - 时间轴视图：中轴线布局，备忘项按日期分组、左右交替展示
 - 日历视图：月历形式查看有提醒的日期，点击日期查看详情
 - 看板视图：类 Trello 的三列看板（待办/进行中/已完成），支持拖拽移动
-- 列表视图：按状态筛选（全部/待办/已完成）
-- 标记完成/未完成
-- 回收站：删除后可恢复，30 天后自动清理
+
+### AI 助手
+
+- 内置多模型 AI 对话，支持流式响应
+- 支持 OpenAI 兼容协议（DeepSeek/通义/智谱/混元/Moonshot 等）、Anthropic Claude、Ollama 本地模型
+- AI 工具调用：可直接操作备忘录（创建/查询/编辑/完成等）
+- 上下文压缩策略，支持长对话
+- Provider 降级机制，多模型自动切换
+- 对话历史管理
+
+### 其他
+
 - 暗色模式：自动跟随系统 / 浅色 / 深色三种模式
 - 系统托盘常驻，关闭窗口不退出
-- SQLite 本地数据库持久化存储
-- 导入/导出：ZIP 格式打包备忘录数据和图片，跨设备迁移
+- SQLite 本地数据库持久化存储（sql.js）
+- 导入/导出：JSON 格式打包备忘录数据，跨设备迁移
 - Webhook：提醒触发时自动推送到企微机器人（Markdown 格式，支持模板变量）
 - CLI 命令行：全部功能可通过 `memo` 命令操作，与 GUI 共享数据
 
@@ -41,15 +63,20 @@
 # 安装依赖
 npm install
 
-# 生产构建（主进程 + 渲染进程），然后运行
-npm run build:main && npx webpack build --mode production && npx electron .
-
 # 开发模式（前端热更新 + 主进程 development 构建）
 npm run dev
+
+# 生产构建（主进程 + 渲染进程），然后运行
+npm run build && npx electron .
 
 # 单独构建主进程
 npm run build:main          # 生产模式（tree-shaking + 压缩）
 npm run build:main:dev      # 开发模式（source map，便于调试）
+
+# 打包分发
+npm run dist:mac            # macOS（dmg + zip）
+npm run dist:win            # Windows（nsis + portable）
+npm run dist:linux          # Linux（AppImage）
 
 # 注册 CLI 全局命令
 npm link
@@ -61,31 +88,57 @@ npm link
 src/
 ├── main/               # Electron 主进程（TypeScript）
 │   ├── index.ts        # 入口：窗口/托盘/生命周期
-│   ├── database/       # SQLite 数据库初始化和 CRUD
+│   ├── database/       # SQLite 数据库
+│   │   ├── index.ts    # 初始化 + 迁移
+│   │   ├── memo.repo.ts    # 备忘录 CRUD
+│   │   ├── ai.repo.ts      # AI 配置/对话持久化
+│   │   └── settings.repo.ts # 应用设置
+│   ├── services/       # 业务逻辑层（IPC 和 API 共用）
 │   ├── scheduler/      # 提醒调度（单 timer 策略 + 系统唤醒检测）
 │   ├── ai/             # AI 多模型调用引擎
-│   │   ├── tools.ts    # 工具定义
-│   │   ├── executor.ts # 服务端工具执行
-│   │   ├── compact.ts  # 上下文压缩策略
+│   │   ├── providers.ts    # OpenAI / Anthropic / Ollama 调用封装
+│   │   ├── tools.ts        # 工具定义
+│   │   ├── executor.ts     # 服务端工具执行
+│   │   ├── compact.ts      # 上下文压缩策略
 │   │   ├── conversation.ts # 对话循环 + Provider 降级
-│   │   └── index.ts    # 对外接口
-│   ├── services/       # 业务逻辑层（IPC 和 API 共用）
+│   │   ├── http.ts         # HTTP 请求工具
+│   │   └── index.ts        # 对外接口
 │   ├── ipc/            # IPC handler
-│   ├── api-server/     # CLI HTTP API
+│   ├── api-server/     # CLI HTTP API（端口 19527）
 │   └── webhook/        # 企微 Webhook 推送
 ├── hooks/              # React 自定义 Hooks
-│   ├── useTheme.ts     # 主题管理
+│   ├── useTheme.ts     # 主题管理（系统/浅色/深色）
 │   ├── useMemos.ts     # 备忘录状态管理
 │   └── useAiChat.ts    # AI 对话状态 + 流式处理
 ├── components/         # React 组件
-├── styles/             # CSS 变量
+│   ├── MemoList.tsx    # 列表视图
+│   ├── MemoForm.tsx    # 备忘录表单
+│   ├── MemoItem.tsx    # 备忘项卡片
+│   ├── Timeline.tsx    # 时间轴视图
+│   ├── CalendarView.tsx    # 日历视图
+│   ├── KanbanView.tsx      # 看板视图
+│   ├── MarkdownView.tsx    # Markdown 渲染
+│   ├── ReminderEditor.tsx  # 提醒编辑器
+│   ├── AttachmentManager.tsx   # 附件管理
+│   ├── AiChatModal.tsx     # AI 对话弹窗
+│   ├── AiMessageList.tsx   # AI 消息列表
+│   ├── AiHistoryPanel.tsx  # AI 对话历史
+│   ├── AiModelSelector.tsx # AI 模型选择
+│   ├── AiPreviewCard.tsx   # AI 预览卡片
+│   ├── AiProviderSettings.tsx  # AI Provider 设置
+│   └── WebhookConfigPanel.tsx  # Webhook 配置
+├── styles/
+│   └── variables.css   # CSS 变量（主题色/间距等）
 ├── App.tsx             # 主应用组件
-└── index.tsx           # React 入口
+├── index.tsx           # React 入口
+└── index.html          # HTML 模板
+cli.js                  # CLI 入口（Commander.js）
+preload.js              # Electron preload 脚本
 ```
 
 ## CLI 使用
 
-> 需要 GUI 应用已启动（CLI 通过本地 HTTP API 与 GUI 通信）
+> GUI 运行时通过 HTTP API 通信；GUI 未运行时自动降级为直连数据库模式（提醒调度不可用）
 
 ```bash
 memo list                          # 列出待办
@@ -93,6 +146,7 @@ memo list -a -v                    # 列出全部（含已完成），显示内�
 memo search 关键词                  # 搜索
 memo show <id>                     # 查看详情（id 可只写前几位）
 memo add "开会" -r "2026-05-15 10:00"  # 新建 + 提醒
+memo add "标题" -c "内容" -t "标签"    # 新建 + 内容 + 标签
 memo edit <id> -T "新标题"          # 编辑
 memo done <id>                     # 标记完成/未完成
 memo pin <id>                      # 置顶/取消
@@ -108,7 +162,10 @@ memo import backup.json            # 从文件导入
 
 ## 技术栈
 
-- Electron（桌面框架）
-- React + TypeScript（UI 组件）
+- Electron 28（桌面框架）
+- React 18 + TypeScript（UI 组件）
+- Webpack 5（构建工具）
+- sql.js（SQLite 本地数据库，基于 WebAssembly）
 - Marked（Markdown 解析渲染）
-- sql.js（SQLite 本地数据库）
+- DOMPurify（HTML 安全过滤）
+- Commander.js（CLI 框架）
