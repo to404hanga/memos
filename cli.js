@@ -273,8 +273,8 @@ async function api(action, ...args) {
       toggleComplete: (d) => httpRequest('POST', '/api/memos/complete', d),
       togglePin: (d) => httpRequest('POST', '/api/memos/pin', d),
       restoreMemo: (d) => httpRequest('POST', '/api/memos/restore', d),
-      permanentDelete: (d) => httpRequest('DELETE', '/api/memos/permanent', d),
-      emptyTrash: () => httpRequest('DELETE', '/api/trash'),
+      permanentDelete: (d) => httpRequest('DELETE', '/api/memos/permanent', { ...d, confirm: true }),
+      emptyTrash: () => httpRequest('DELETE', '/api/trash', { confirm: true }),
       addTag: (d) => httpRequest('POST', '/api/tags', d),
       deleteTag: (d) => httpRequest('DELETE', '/api/tags', d),
     };
