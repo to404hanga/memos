@@ -3,10 +3,13 @@
  *
  * 录音在主进程的隐藏窗口中进行（避免渲染进程 crash）
  * 渲染进程只负责 UI 和 IPC 调用
+ *
+ * 首次使用时引导用户下载模型，显示下载进度
  */
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 
 type VoiceState = 'idle' | 'recording' | 'processing';
+type ModelState = 'unknown' | 'not_downloaded' | 'downloading' | 'ready';
 
 interface Props {
   onTranscribed: (text: string) => void;
@@ -17,22 +20,82 @@ export default function VoiceInputButton({ onTranscribed, disabled }: Props): Re
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [modelState, setModelState] = useState<ModelState>('unknown');
+  const [downloadPercent, setDownloadPercent] = useState(0);
+  const [showDownloadPrompt, setShowDownloadPrompt] = useState(false);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
   const onTranscribedRef = useRef(onTranscribed);
   onTranscribedRef.current = onTranscribed;
+  const unsubProgressRef = useRef<(() => void) | null>(null);
 
+  // 初始化时检查模型状态
   useEffect(() => {
+    if (window.api?.asrGetStatus) {
+      window.api.asrGetStatus().then((status) => {
+        if (status === 'ready' || status === 'idle') {
+          setModelState('ready');
+        } else if (status === 'downloading') {
+          setModelState('downloading');
+        } else {
+          setModelState('not_downloaded');
+        }
+      }).catch(() => setModelState('not_downloaded'));
+    }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (unsubProgressRef.current) unsubProgressRef.current();
     };
+  }, []);
+
+  // 下载模型
+  const handleDownload = useCallback(async () => {
+    setShowDownloadPrompt(false);
+    setModelState('downloading');
+    setDownloadPercent(0);
+
+    // 监听下载进度
+    if (window.api?.onAsrDownloadProgress) {
+      unsubProgressRef.current = window.api.onAsrDownloadProgress((progress) => {
+        setDownloadPercent(progress.percent);
+      });
+    }
+
+    try {
+      const res = await window.api.asrDownload();
+      if (res.success) {
+        setModelState('ready');
+      } else {
+        setError(res.error || '下载失败');
+        setModelState('not_downloaded');
+      }
+    } catch (err: any) {
+      setError(err.message || '下载失败');
+      setModelState('not_downloaded');
+    }
+
+    if (unsubProgressRef.current) {
+      unsubProgressRef.current();
+      unsubProgressRef.current = null;
+    }
   }, []);
 
   const startRecording = useCallback(async () => {
     setError(null);
 
+    // 检查模型是否已下载
+    if (modelState === 'not_downloaded') {
+      setShowDownloadPrompt(true);
+      return;
+    }
+    if (modelState === 'downloading') {
+      setError('模型下载中，请等待完成');
+      return;
+    }
+
     try {
-      // 先请求权限
+      // 请求麦克风权限
       if (window.api?.asrRequestMicPermission) {
         const perm = await window.api.asrRequestMicPermission();
         if (!perm.granted) {
@@ -54,7 +117,7 @@ export default function VoiceInputButton({ onTranscribed, disabled }: Props): Re
         const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
         setDuration(elapsed);
         if (elapsed >= 60) {
-          stopAndRecognize();
+          stopRef.current();
         }
       }, 250);
 
@@ -62,7 +125,7 @@ export default function VoiceInputButton({ onTranscribed, disabled }: Props): Re
     } catch (err: any) {
       setError(err.message || '录音启动失败');
     }
-  }, []);
+  }, [modelState]);
 
   const stopAndRecognize = useCallback(async () => {
     if (timerRef.current) {
@@ -86,7 +149,6 @@ export default function VoiceInputButton({ onTranscribed, disabled }: Props): Re
     setDuration(0);
   }, []);
 
-  // 用 ref 让 timer 能调到最新 stopAndRecognize
   const stopRef = useRef(stopAndRecognize);
   stopRef.current = stopAndRecognize;
 
@@ -107,16 +169,23 @@ export default function VoiceInputButton({ onTranscribed, disabled }: Props): Re
   let btnClass = 'ai-voice-btn';
   if (voiceState === 'recording') btnClass += ' recording';
   if (voiceState === 'processing') btnClass += ' processing';
+  if (modelState === 'downloading') btnClass += ' downloading';
 
   return (
     <div className="ai-voice-input-wrap">
       <button
         className={btnClass}
         onClick={handleClick}
-        disabled={disabled || voiceState === 'processing'}
-        title={voiceState === 'recording' ? '点击停止录音' : voiceState === 'processing' ? '识别中...' : '语音输入'}
+        disabled={disabled || voiceState === 'processing' || modelState === 'downloading'}
+        title={
+          modelState === 'downloading' ? `模型下载中 ${downloadPercent}%` :
+          voiceState === 'recording' ? '点击停止录音' :
+          voiceState === 'processing' ? '识别中...' :
+          modelState === 'not_downloaded' ? '点击下载语音模型' :
+          '语音输入'
+        }
       >
-        {voiceState === 'processing' ? (
+        {voiceState === 'processing' || modelState === 'downloading' ? (
           <span className="ai-voice-spinner" />
         ) : (
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -127,11 +196,33 @@ export default function VoiceInputButton({ onTranscribed, disabled }: Props): Re
           </svg>
         )}
       </button>
+
+      {/* 录音时长 */}
       {voiceState === 'recording' && (
         <span className="ai-voice-duration">{formatDuration(duration)}</span>
       )}
+
+      {/* 下载进度 */}
+      {modelState === 'downloading' && (
+        <span className="ai-voice-duration">{downloadPercent}%</span>
+      )}
+
+      {/* 错误提示 */}
       {error && (
         <span className="ai-voice-error" title={error} onClick={() => setError(null)}>!</span>
+      )}
+
+      {/* 首次使用引导弹窗 */}
+      {showDownloadPrompt && (
+        <div className="ai-voice-download-prompt">
+          <div className="ai-voice-download-prompt-content">
+            <p>需要下载语音识别模型 (~600MB) 才能使用语音输入功能</p>
+            <div className="ai-voice-download-prompt-actions">
+              <button onClick={() => setShowDownloadPrompt(false)}>取消</button>
+              <button className="primary" onClick={handleDownload}>开始下载</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
