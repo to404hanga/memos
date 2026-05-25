@@ -90,7 +90,8 @@ class AsrEngine {
     const stream = this.recognizer.createStream();
     stream.acceptWaveform({ sampleRate, samples });
     this.recognizer.decode(stream);
-    return stream.result.text?.trim() || '';
+    const result = this.recognizer.getResult(stream);
+    return result?.text?.trim() || '';
   }
 
   destroy(): void {
