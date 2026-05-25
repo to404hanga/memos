@@ -1,6 +1,6 @@
 # 备忘录提醒 (Memo Reminder)
 
-一个简洁美观的桌面备忘录应用，支持 Markdown 编辑、图片插入、周期提醒、多视图切换和 AI 助手。
+一个简洁美观的桌面备忘录应用，支持 Markdown 编辑、图片插入、周期提醒、多视图切换、AI 助手和语音输入。
 
 ## 功能
 
@@ -47,6 +47,15 @@
 - 上下文压缩策略，支持长对话
 - Provider 降级机制，多模型自动切换
 - 对话历史管理
+
+### 语音输入
+
+- AI 侧边栏支持语音输入，点击麦克风按钮录音
+- 本地离线语音识别，基于 Qwen3-ASR-0.6B ONNX 模型（sherpa-onnx 推理引擎）
+- 支持 52 种语言和方言（含中文普通话 + 23 种方言 + 英语等）
+- 模型按需下载（约 600MB），首次使用时提示下载
+- 懒加载 + 空闲自动释放，不影响日常使用性能
+- 全程离线运行，无需联网
 
 ### 其他
 
@@ -103,6 +112,11 @@ src/
 │   │   ├── conversation.ts # 对话循环 + Provider 降级
 │   │   ├── http.ts         # HTTP 请求工具
 │   │   └── index.ts        # 对外接口
+│   ├── asr/            # 语音识别模块
+│   │   ├── engine.ts       # sherpa-onnx ASR 引擎封装
+│   │   ├── downloader.ts   # 模型下载管理
+│   │   ├── ipc.ts          # ASR IPC handlers
+│   │   └── index.ts        # 模块入口
 │   ├── ipc/            # IPC handler
 │   ├── api-server/     # CLI HTTP API（端口 19527）
 │   └── webhook/        # 企微 Webhook 推送
@@ -120,6 +134,7 @@ src/
 │   ├── MarkdownView.tsx    # Markdown 渲染
 │   ├── ReminderEditor.tsx  # 提醒编辑器
 │   ├── AttachmentManager.tsx   # 附件管理
+│   ├── VoiceInputButton.tsx    # 语音输入按钮
 │   ├── AiChatModal.tsx     # AI 对话弹窗
 │   ├── AiMessageList.tsx   # AI 消息列表
 │   ├── AiHistoryPanel.tsx  # AI 对话历史
@@ -166,6 +181,7 @@ memo import backup.json            # 从文件导入
 - React 18 + TypeScript（UI 组件）
 - Webpack 5（构建工具）
 - sql.js（SQLite 本地数据库，基于 WebAssembly）
+- sherpa-onnx-node（离线语音识别引擎，Qwen3-ASR 模型）
 - Marked（Markdown 解析渲染）
 - DOMPurify（HTML 安全过滤）
 - Commander.js（CLI 框架）
