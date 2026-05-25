@@ -19,9 +19,9 @@ function getModelDir(): string {
 }
 
 const MODEL_FILES = [
+  'conv_frontend.onnx',
   'encoder.int8.onnx',
   'decoder.int8.onnx',
-  'tokens.txt',
 ];
 
 class AsrEngine {
@@ -60,15 +60,15 @@ class AsrEngine {
       const config = {
         modelConfig: {
           qwen3Asr: {
-            model: path.join(modelDir, 'encoder.int8.onnx'),
+            convFrontend: path.join(modelDir, 'conv_frontend.onnx'),
+            encoder: path.join(modelDir, 'encoder.int8.onnx'),
             decoder: path.join(modelDir, 'decoder.int8.onnx'),
+            tokenizer: path.join(modelDir, 'tokenizer'),
           },
-          tokens: path.join(modelDir, 'tokens.txt'),
           numThreads: 4,
           provider: 'cpu',
           debug: false,
         },
-        decodingMethod: 'greedy_search',
       };
 
       this.recognizer = new sherpa!.OfflineRecognizer(config);

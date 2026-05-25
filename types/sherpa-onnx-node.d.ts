@@ -5,13 +5,20 @@
  */
 declare module 'sherpa-onnx-node' {
   interface Qwen3AsrModelConfig {
-    model: string;
+    convFrontend: string;
+    encoder: string;
     decoder: string;
+    tokenizer: string;
+    maxTotalLen?: number;
+    maxNewTokens?: number;
+    temperature?: number;
+    topP?: number;
+    seed?: number;
   }
 
   interface OfflineModelConfig {
     qwen3Asr?: Qwen3AsrModelConfig;
-    tokens: string;
+    tokens?: string;
     numThreads?: number;
     provider?: string;
     debug?: boolean;

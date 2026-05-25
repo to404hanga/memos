@@ -12,13 +12,19 @@ import * as https from 'https';
 import * as http from 'http';
 import { getModelDir, MODEL_FILES } from './engine';
 
-// 模型下载源（优先使用国内镜像）
-const MODEL_BASE_URLS = [
-  // HuggingFace 镜像
-  'https://hf-mirror.com/k2-fsa/sherpa-onnx-qwen3-asr-0.6B-2026-03-25',
-  // HuggingFace 原始
-  'https://huggingface.co/k2-fsa/sherpa-onnx-qwen3-asr-0.6B-2026-03-25/resolve/main',
+// 模型下载源（tar.bz2 压缩包）
+const MODEL_DOWNLOAD_URLS = [
+  // GitHub Release（官方）
+  'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2',
 ];
+
+// 模型文件最小大小（字节），用于完整性校验
+const MODEL_MIN_SIZES: Record<string, number> = {
+  'conv_frontend.onnx': 30 * 1024 * 1024,     // > 30MB
+  'encoder.int8.onnx': 100 * 1024 * 1024,     // > 100MB
+  'decoder.int8.onnx': 500 * 1024 * 1024,     // > 500MB
+  'tokens.txt': 1024,                           // > 1KB (备选 tokenizer)
+};
 
 export type DownloadProgress = {
   file: string;
@@ -40,63 +46,83 @@ class ModelDownloader {
   }
 
   /**
-   * 检查模型是否完整
+   * 检查模型是否完整（文件存在 + 大小合理）
    */
   isModelComplete(): boolean {
     const modelDir = getModelDir();
     if (!fs.existsSync(modelDir)) return false;
-    return MODEL_FILES.every(file => fs.existsSync(path.join(modelDir, file)));
+    return MODEL_FILES.every(file => {
+      const filePath = path.join(modelDir, file);
+      if (!fs.existsSync(filePath)) return false;
+      const stat = fs.statSync(filePath);
+      const minSize = MODEL_MIN_SIZES[file] || 0;
+      return stat.size >= minSize;
+    });
   }
 
   /**
-   * 下载模型文件
+   * 删除不完整的模型文件（用于重新下载）
+   */
+  cleanIncomplete(): void {
+    const modelDir = getModelDir();
+    if (!fs.existsSync(modelDir)) return;
+    for (const file of MODEL_FILES) {
+      const filePath = path.join(modelDir, file);
+      const tmpPath = filePath + '.tmp';
+      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch {}
+      // 删除大小不对的文件
+      if (fs.existsSync(filePath)) {
+        const stat = fs.statSync(filePath);
+        const minSize = MODEL_MIN_SIZES[file] || 0;
+        if (stat.size < minSize) {
+          try { fs.unlinkSync(filePath); } catch {}
+        }
+      }
+    }
+  }
+
+  /**
+   * 下载模型（下载 tar.bz2 并解压）
    */
   async download(onProgress?: (progress: DownloadProgress) => void): Promise<void> {
     if (this.status === 'downloading') {
-      throw new Error('Download already in progress');
+      throw new Error('下载正在进行中');
     }
 
     this.status = 'downloading';
     const modelDir = getModelDir();
-
-    // 确保目录存在
     fs.mkdirSync(modelDir, { recursive: true });
 
+    const tarPath = path.join(modelDir, 'model.tar.bz2');
+
     try {
-      for (let i = 0; i < MODEL_FILES.length; i++) {
-        const file = MODEL_FILES[i];
-        const filePath = path.join(modelDir, file);
-
-        // 跳过已存在的文件
-        if (fs.existsSync(filePath)) {
-          onProgress?.({
-            file,
-            fileIndex: i,
-            totalFiles: MODEL_FILES.length,
-            bytesDownloaded: 0,
-            totalBytes: 0,
-            percent: Math.round(((i + 1) / MODEL_FILES.length) * 100),
-          });
-          continue;
-        }
-
-        await this.downloadFile(file, filePath, (bytesDownloaded, totalBytes) => {
-          const fileProgress = totalBytes > 0 ? bytesDownloaded / totalBytes : 0;
-          const overallPercent = Math.round(((i + fileProgress) / MODEL_FILES.length) * 100);
-          onProgress?.({
-            file,
-            fileIndex: i,
-            totalFiles: MODEL_FILES.length,
-            bytesDownloaded,
-            totalBytes,
-            percent: overallPercent,
-          });
+      // 下载压缩包
+      await this.downloadUrl(MODEL_DOWNLOAD_URLS[0], tarPath, (bytesDownloaded, totalBytes) => {
+        const percent = totalBytes > 0 ? Math.round((bytesDownloaded / totalBytes) * 90) : 0;
+        onProgress?.({
+          file: 'model.tar.bz2',
+          fileIndex: 0,
+          totalFiles: 1,
+          bytesDownloaded,
+          totalBytes,
+          percent,
         });
-      }
+      });
 
+      // 解压 tar.bz2
+      onProgress?.({ file: '解压中...', fileIndex: 0, totalFiles: 1, bytesDownloaded: 0, totalBytes: 0, percent: 92 });
+
+      const { execSync } = require('child_process');
+      execSync(`tar xjf "${tarPath}" -C "${modelDir}" --strip-components=1`, { timeout: 120000 });
+
+      // 清理压缩包
+      try { fs.unlinkSync(tarPath); } catch {}
+
+      onProgress?.({ file: '完成', fileIndex: 0, totalFiles: 1, bytesDownloaded: 0, totalBytes: 0, percent: 100 });
       this.status = 'done';
     } catch (err) {
       this.status = 'error';
+      try { fs.unlinkSync(tarPath); } catch {}
       throw err;
     }
   }
@@ -113,112 +139,56 @@ class ModelDownloader {
   }
 
   /**
-   * 下载单个文件
+   * 下载文件（支持重定向）
    */
-  private downloadFile(
-    fileName: string,
-    destPath: string,
-    onProgress: (downloaded: number, total: number) => void
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const tryUrl = (urlIndex: number) => {
-        if (urlIndex >= MODEL_BASE_URLS.length) {
-          reject(new Error(`Failed to download ${fileName} from all sources`));
-          return;
-        }
-
-        const url = `${MODEL_BASE_URLS[urlIndex]}/${fileName}`;
-        const client = url.startsWith('https') ? https : http;
-        const tmpPath = destPath + '.tmp';
-
-        const req = client.get(url, { timeout: 30000 }, (res) => {
-          // 处理重定向
-          if (res.statusCode === 301 || res.statusCode === 302) {
-            const redirectUrl = res.headers.location;
-            if (redirectUrl) {
-              this.downloadFromUrl(redirectUrl, tmpPath, onProgress)
-                .then(() => {
-                  fs.renameSync(tmpPath, destPath);
-                  resolve();
-                })
-                .catch(() => tryUrl(urlIndex + 1));
-              return;
-            }
-          }
-
-          if (res.statusCode !== 200) {
-            res.resume();
-            tryUrl(urlIndex + 1);
-            return;
-          }
-
-          const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
-          let downloaded = 0;
-
-          const writeStream = fs.createWriteStream(tmpPath);
-          res.on('data', (chunk: Buffer) => {
-            downloaded += chunk.length;
-            onProgress(downloaded, totalBytes);
-          });
-          res.pipe(writeStream);
-
-          writeStream.on('finish', () => {
-            fs.renameSync(tmpPath, destPath);
-            resolve();
-          });
-
-          writeStream.on('error', () => {
-            try { fs.unlinkSync(tmpPath); } catch {}
-            tryUrl(urlIndex + 1);
-          });
-        });
-
-        req.on('error', () => tryUrl(urlIndex + 1));
-        req.on('timeout', () => {
-          req.destroy();
-          tryUrl(urlIndex + 1);
-        });
-      };
-
-      tryUrl(0);
-    });
-  }
-
-  /**
-   * 从指定 URL 下载
-   */
-  private downloadFromUrl(
+  private downloadUrl(
     url: string,
     destPath: string,
     onProgress: (downloaded: number, total: number) => void
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      const client = url.startsWith('https') ? https : http;
-      const req = client.get(url, { timeout: 60000 }, (res) => {
-        if (res.statusCode !== 200) {
-          res.resume();
-          reject(new Error(`HTTP ${res.statusCode}`));
+      const doRequest = (reqUrl: string, redirects: number) => {
+        if (redirects > 5) {
+          reject(new Error('Too many redirects'));
           return;
         }
+        const client = reqUrl.startsWith('https') ? https : http;
+        const req = client.get(reqUrl, { timeout: 30000 }, (res) => {
+          if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
+            const location = res.headers.location;
+            res.resume();
+            if (location) {
+              doRequest(location, redirects + 1);
+            } else {
+              reject(new Error('Redirect without location'));
+            }
+            return;
+          }
+          if (res.statusCode !== 200) {
+            res.resume();
+            reject(new Error(`HTTP ${res.statusCode}`));
+            return;
+          }
 
-        const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
-        let downloaded = 0;
+          const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+          let downloaded = 0;
+          const writeStream = fs.createWriteStream(destPath);
 
-        const writeStream = fs.createWriteStream(destPath);
-        res.on('data', (chunk: Buffer) => {
-          downloaded += chunk.length;
-          onProgress(downloaded, totalBytes);
+          res.on('data', (chunk: Buffer) => {
+            downloaded += chunk.length;
+            onProgress(downloaded, totalBytes);
+          });
+          res.pipe(writeStream);
+          writeStream.on('finish', resolve);
+          writeStream.on('error', (err) => {
+            try { fs.unlinkSync(destPath); } catch {}
+            reject(err);
+          });
         });
-        res.pipe(writeStream);
-        writeStream.on('finish', resolve);
-        writeStream.on('error', reject);
-      });
-
-      req.on('error', reject);
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('Download timeout'));
-      });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('Download timeout')); });
+      };
+      doRequest(url, 0);
     });
   }
 }
