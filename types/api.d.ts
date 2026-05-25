@@ -143,6 +143,14 @@ export interface ElectronAPI {
 
   /** 获取 ASR 引擎/模型状态 */
   asrGetStatus: () => Promise<AsrStatusType>;
+  /** 请求麦克风权限（macOS 需要主进程发起） */
+  asrRequestMicPermission: () => Promise<{ granted: boolean; status?: string }>;
+  /** 开始录音（主进程隐藏窗口中执行） */
+  asrStartRecording: () => Promise<{ success: boolean; error?: string }>;
+  /** 停止录音并识别（返回文本） */
+  asrStopRecording: () => Promise<{ success: boolean; text?: string; error?: string }>;
+  /** 取消录音 */
+  asrCancelRecording: () => Promise<{ success: boolean }>;
   /** 识别音频数据（PCM Float32 16kHz mono） */
   asrRecognize: (audioBuffer: ArrayBuffer) => Promise<{ success: boolean; text?: string; error?: string }>;
   /** 预加载 ASR 模型到内存 */

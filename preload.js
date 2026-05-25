@@ -67,6 +67,10 @@ contextBridge.exposeInMainWorld('api', {
   aiClearConversations: () => ipcRenderer.invoke('ai-clear-conversations'),
   // ASR 语音识别
   asrGetStatus: () => ipcRenderer.invoke('asr:status'),
+  asrRequestMicPermission: () => ipcRenderer.invoke('asr:request-mic-permission'),
+  asrStartRecording: () => ipcRenderer.invoke('asr:start-recording'),
+  asrStopRecording: () => ipcRenderer.invoke('asr:stop-recording'),
+  asrCancelRecording: () => ipcRenderer.invoke('asr:cancel-recording'),
   asrRecognize: (audioBuffer) => ipcRenderer.invoke('asr:recognize', audioBuffer),
   asrPreload: () => ipcRenderer.invoke('asr:preload'),
   asrDownload: () => ipcRenderer.invoke('asr:download'),
