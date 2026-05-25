@@ -4082,6 +4082,95 @@ input, textarea, button {
   font-weight: bold;
 }
 
+/* ===== Voice Input Button ===== */
+.ai-voice-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ai-voice-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.12s, box-shadow 0.2s;
+}
+
+.ai-voice-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  transform: scale(1.05);
+}
+
+.ai-voice-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ai-voice-btn.recording {
+  background: #ff3b30;
+  color: #fff;
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+.ai-voice-btn.processing {
+  background: var(--accent);
+  color: #fff;
+}
+
+@keyframes voice-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(255, 59, 48, 0);
+  }
+}
+
+.ai-voice-duration {
+  font-size: 11px;
+  color: #ff3b30;
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+}
+
+.ai-voice-error {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ff9500;
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+}
+
+.ai-voice-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: voice-spin 0.6s linear infinite;
+}
+
+@keyframes voice-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .ai-model-menu-mask {
   position: fixed;
   inset: 0;

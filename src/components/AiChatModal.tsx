@@ -14,6 +14,7 @@ import AiProviderSettings from './AiProviderSettings';
 import AiMessageList from './AiMessageList';
 import AiModelSelector from './AiModelSelector';
 import AiHistoryPanel from './AiHistoryPanel';
+import VoiceInputButton from './VoiceInputButton';
 import { useAiChat } from '../hooks/useAiChat';
 import type { AiCreateMemoArgs, AiToolCall, MemoFormData } from '../../types/global';
 
@@ -214,6 +215,10 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
                       </svg>
                     </div>
                   )}
+                  <VoiceInputButton
+                    onTranscribed={(text) => { chat.setInput(chat.input ? chat.input + ' ' + text : text); }}
+                    disabled={chat.sending}
+                  />
                   <button
                     className="ai-composer-send"
                     onClick={chat.send}
