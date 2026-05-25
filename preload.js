@@ -71,6 +71,7 @@ contextBridge.exposeInMainWorld('api', {
   asrStartRecording: () => ipcRenderer.invoke('asr:start-recording'),
   asrStopRecording: () => ipcRenderer.invoke('asr:stop-recording'),
   asrCancelRecording: () => ipcRenderer.invoke('asr:cancel-recording'),
+  asrCheckVadStopped: () => ipcRenderer.invoke('asr:check-vad-stopped'),
   asrRecognize: (audioBuffer) => ipcRenderer.invoke('asr:recognize', audioBuffer),
   asrPreload: () => ipcRenderer.invoke('asr:preload'),
   asrDownload: () => ipcRenderer.invoke('asr:download'),

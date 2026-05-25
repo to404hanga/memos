@@ -48,7 +48,7 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
     return { granted: false, status };
   });
 
-  // 开始录音（在隐藏窗口中）
+  // 开始录音（在隐藏窗口中，带 VAD 静音检测）
   ipcMain.handle('asr:start-recording', async () => {
     try {
       const win = getRecordWindow();
@@ -62,12 +62,53 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
             window._mediaStream.getTracks().forEach(t => t.stop());
           }
           window._chunks = [];
+          window._silenceStart = 0;
+          window._hasVoice = false;
+          window._vadStopped = false;
+
           window._mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           window._recorder = new MediaRecorder(window._mediaStream);
           window._recorder.ondataavailable = (e) => {
             if (e.data.size > 0) window._chunks.push(e.data);
           };
           window._recorder.start(500);
+
+          // VAD: 使用 AudioContext 分析音量，静音 2 秒后自动停止
+          window._vadCtx = new AudioContext();
+          const source = window._vadCtx.createMediaStreamSource(window._mediaStream);
+          window._vadAnalyser = window._vadCtx.createAnalyser();
+          window._vadAnalyser.fftSize = 512;
+          source.connect(window._vadAnalyser);
+
+          const bufferLength = window._vadAnalyser.fftSize;
+          const dataArray = new Float32Array(bufferLength);
+
+          window._vadInterval = setInterval(() => {
+            if (window._vadStopped) return;
+            window._vadAnalyser.getFloatTimeDomainData(dataArray);
+            // 计算 RMS
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+              sum += dataArray[i] * dataArray[i];
+            }
+            const rms = Math.sqrt(sum / bufferLength);
+
+            if (rms > 0.01) {
+              // 有声音
+              window._hasVoice = true;
+              window._silenceStart = 0;
+            } else if (window._hasVoice) {
+              // 静音中
+              if (!window._silenceStart) {
+                window._silenceStart = Date.now();
+              } else if (Date.now() - window._silenceStart > 2000) {
+                // 静音超过 2 秒，标记 VAD 停止
+                window._vadStopped = true;
+                clearInterval(window._vadInterval);
+              }
+            }
+          }, 100);
+
           return true;
         })()
       `);
@@ -77,12 +118,27 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
     }
   });
 
+  // 检查 VAD 是否自动停止了
+  ipcMain.handle('asr:check-vad-stopped', async () => {
+    try {
+      if (!recordWindow || recordWindow.isDestroyed()) return { stopped: false };
+      const stopped = await recordWindow.webContents.executeJavaScript('!!window._vadStopped');
+      return { stopped };
+    } catch {
+      return { stopped: false };
+    }
+  });
+
   // 停止录音并返回 PCM 数据
   ipcMain.handle('asr:stop-recording', async () => {
     try {
       const win = getRecordWindow();
       const result = await win.webContents.executeJavaScript(`
         new Promise((resolve, reject) => {
+          // 清理 VAD
+          if (window._vadInterval) { clearInterval(window._vadInterval); window._vadInterval = null; }
+          if (window._vadCtx) { window._vadCtx.close().catch(() => {}); window._vadCtx = null; }
+
           if (!window._recorder || window._recorder.state === 'inactive') {
             resolve(null);
             return;
@@ -95,8 +151,8 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
                 window._mediaStream.getTracks().forEach(t => t.stop());
                 window._mediaStream = null;
               }
+              if (blob.size === 0) { resolve(null); return; }
               const arrayBuf = await blob.arrayBuffer();
-              // 解码为 PCM 16kHz
               const audioCtx = new OfflineAudioContext(1, 1, 16000);
               const decoded = await audioCtx.decodeAudioData(arrayBuf);
               const offCtx = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
@@ -106,7 +162,6 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
               src.start(0);
               const rendered = await offCtx.startRendering();
               const pcm = rendered.getChannelData(0);
-              // 转为普通数组传回
               resolve(Array.from(pcm));
             } catch (e) {
               reject(e);

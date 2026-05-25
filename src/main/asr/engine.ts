@@ -102,7 +102,8 @@ class AsrEngine {
       this.recognizer.free?.();
       this.recognizer = null;
     }
-    this.status = 'not_downloaded';
+    // 根据模型文件是否存在设置正确状态
+    this.status = this.isModelAvailable() ? 'not_downloaded' : 'not_downloaded';
   }
 
   private resetIdleTimer(): void {

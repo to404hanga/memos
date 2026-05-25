@@ -113,13 +113,26 @@ export default function VoiceInputButton({ onTranscribed, disabled }: Props): Re
 
       startTimeRef.current = Date.now();
       setDuration(0);
-      timerRef.current = setInterval(() => {
+      timerRef.current = setInterval(async () => {
         const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
         setDuration(elapsed);
+
+        // 最大时长限制
         if (elapsed >= 60) {
           stopRef.current();
+          return;
         }
-      }, 250);
+
+        // VAD: 检查是否静音超时自动停止
+        if (elapsed >= 2 && window.api?.asrCheckVadStopped) {
+          try {
+            const { stopped } = await window.api.asrCheckVadStopped();
+            if (stopped) {
+              stopRef.current();
+            }
+          } catch {}
+        }
+      }, 300);
 
       setVoiceState('recording');
     } catch (err: any) {

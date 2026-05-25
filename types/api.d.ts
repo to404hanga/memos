@@ -151,6 +151,8 @@ export interface ElectronAPI {
   asrStopRecording: () => Promise<{ success: boolean; text?: string; error?: string }>;
   /** 取消录音 */
   asrCancelRecording: () => Promise<{ success: boolean }>;
+  /** 检查 VAD 是否检测到静音自动停止 */
+  asrCheckVadStopped: () => Promise<{ stopped: boolean }>;
   /** 识别音频数据（PCM Float32 16kHz mono） */
   asrRecognize: (audioBuffer: ArrayBuffer) => Promise<{ success: boolean; text?: string; error?: string }>;
   /** 预加载 ASR 模型到内存 */
