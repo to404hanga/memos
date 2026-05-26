@@ -216,7 +216,8 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
                     </div>
                   )}
                   <VoiceInputButton
-                    onTranscribed={(text) => { chat.setInput(chat.input ? chat.input + ' ' + text : text); }}
+                    currentInput={chat.input}
+                    onTextUpdate={chat.setInput}
                     disabled={chat.sending}
                   />
                   <button
