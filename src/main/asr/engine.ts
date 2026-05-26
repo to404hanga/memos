@@ -30,6 +30,11 @@ class AsrEngine {
   private idleTimer: NodeJS.Timeout | null = null;
   private readonly IDLE_TIMEOUT = 5 * 60 * 1000;
 
+  // 流式缓冲
+  private pcmBuffer: Float32Array = new Float32Array(0);
+  private isStreaming: boolean = false;
+  private lastDecodeTime: number = 0;
+
   getStatus(): AsrStatus {
     if (this.recognizer) return 'ready';
     if (this.status === 'loading') return 'loading';
@@ -91,7 +96,41 @@ class AsrEngine {
     stream.acceptWaveform({ sampleRate, samples });
     this.recognizer.decode(stream);
     const result = this.recognizer.getResult(stream);
+    stream.free?.();
     return result?.text?.trim() || '';
+  }
+
+  // --- 模拟流式识别接口 ---
+  async pushChunk(chunk: Float32Array, sampleRate: number = 16000): Promise<string> {
+    if (!this.recognizer) await this.init();
+    this.resetIdleTimer();
+    this.isStreaming = true;
+
+    // 追加缓冲
+    const newBuffer = new Float32Array(this.pcmBuffer.length + chunk.length);
+    newBuffer.set(this.pcmBuffer);
+    newBuffer.set(chunk, this.pcmBuffer.length);
+    this.pcmBuffer = newBuffer;
+
+    const now = Date.now();
+    // 节流：每 500ms 至少执行一次 decode 返回 partial 结果
+    if (now - this.lastDecodeTime > 500) {
+      this.lastDecodeTime = now;
+      return this.recognize(this.pcmBuffer, sampleRate);
+    }
+    return ''; // 未触发 decode
+  }
+
+  async flushStream(sampleRate: number = 16000): Promise<string> {
+    if (!this.isStreaming || this.pcmBuffer.length === 0) return '';
+    const text = await this.recognize(this.pcmBuffer, sampleRate);
+    this.cancelStream();
+    return text;
+  }
+
+  cancelStream(): void {
+    this.pcmBuffer = new Float32Array(0);
+    this.isStreaming = false;
   }
 
   destroy(): void {

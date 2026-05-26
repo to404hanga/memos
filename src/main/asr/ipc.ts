@@ -66,19 +66,34 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
           window._hasVoice = false;
           window._vadStopped = false;
 
-          window._mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          window._recorder = new MediaRecorder(window._mediaStream);
-          window._recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) window._chunks.push(e.data);
-          };
-          window._recorder.start(500);
+          window._mediaStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              noiseSuppression: true,
+              echoCancellation: true,
+              autoGainControl: true
+            } 
+          });
 
-          // VAD: 使用 AudioContext 分析音量，静音 2 秒后自动停止
-          window._vadCtx = new AudioContext();
+          // 使用 AudioContext 实时提取 PCM 并发送给主进程
+          window._vadCtx = new AudioContext({ sampleRate: 16000 });
           const source = window._vadCtx.createMediaStreamSource(window._mediaStream);
+          
+          // 创建 ScriptProcessorNode 来实时截取 PCM (兼容性好)
+          window._processor = window._vadCtx.createScriptProcessor(4096, 1, 1);
+          window._processor.onaudioprocess = (e) => {
+            if (window._vadStopped) return;
+            const inputData = e.inputBuffer.getChannelData(0);
+            // 复制一份数据，通过 IPC 发送给主进程
+            const pcm = new Float32Array(inputData);
+            require('electron').ipcRenderer.send('asr:audio-chunk', pcm);
+          };
+
           window._vadAnalyser = window._vadCtx.createAnalyser();
           window._vadAnalyser.fftSize = 512;
+          
           source.connect(window._vadAnalyser);
+          window._vadAnalyser.connect(window._processor);
+          window._processor.connect(window._vadCtx.destination);
 
           const bufferLength = window._vadAnalyser.fftSize;
           const dataArray = new Float32Array(bufferLength);
@@ -101,10 +116,11 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
               // 静音中
               if (!window._silenceStart) {
                 window._silenceStart = Date.now();
-              } else if (Date.now() - window._silenceStart > 2000) {
-                // 静音超过 2 秒，标记 VAD 停止
-                window._vadStopped = true;
-                clearInterval(window._vadInterval);
+              } else if (Date.now() - window._silenceStart > 1500) {
+                // 静音超过 1.5 秒，触发分段
+                window._hasVoice = false;
+                window._silenceStart = 0;
+                require('electron').ipcRenderer.send('asr:segment-end');
               }
             }
           }, 100);
@@ -137,45 +153,23 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
         new Promise((resolve, reject) => {
           // 清理 VAD
           if (window._vadInterval) { clearInterval(window._vadInterval); window._vadInterval = null; }
+          if (window._processor) { window._processor.disconnect(); window._processor = null; }
           if (window._vadCtx) { window._vadCtx.close().catch(() => {}); window._vadCtx = null; }
 
-          if (!window._recorder || window._recorder.state === 'inactive') {
-            resolve(null);
-            return;
+          if (window._mediaStream) {
+            window._mediaStream.getTracks().forEach(t => t.stop());
+            window._mediaStream = null;
           }
-          window._recorder.onstop = async () => {
-            try {
-              const blob = new Blob(window._chunks, { type: 'audio/webm' });
-              window._chunks = [];
-              if (window._mediaStream) {
-                window._mediaStream.getTracks().forEach(t => t.stop());
-                window._mediaStream = null;
-              }
-              if (blob.size === 0) { resolve(null); return; }
-              const arrayBuf = await blob.arrayBuffer();
-              const audioCtx = new OfflineAudioContext(1, 1, 16000);
-              const decoded = await audioCtx.decodeAudioData(arrayBuf);
-              const offCtx = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
-              const src = offCtx.createBufferSource();
-              src.buffer = decoded;
-              src.connect(offCtx.destination);
-              src.start(0);
-              const rendered = await offCtx.startRendering();
-              const pcm = rendered.getChannelData(0);
-              resolve(Array.from(pcm));
-            } catch (e) {
-              reject(e);
-            }
-          };
-          window._recorder.stop();
+          resolve(true);
         })
       `);
 
-      if (!result) return { success: false, error: '无录音数据' };
-
-      const samples = new Float32Array(result);
-      const text = await asrEngine.recognize(samples, 16000);
-      return { success: true, text };
+      // 通知引擎结束当前流，并返回最终识别结果
+      const text = await asrEngine.flushStream();
+      if (text && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('asr:progress', { type: 'final', text, segmentId: Date.now().toString() });
+      }
+      return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
@@ -186,13 +180,37 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
     try {
       const win = getRecordWindow();
       await win.webContents.executeJavaScript(`
-        if (window._recorder && window._recorder.state !== 'inactive') window._recorder.stop();
+        if (window._processor) { window._processor.disconnect(); window._processor = null; }
+        if (window._vadInterval) { clearInterval(window._vadInterval); window._vadInterval = null; }
+        if (window._vadCtx) { window._vadCtx.close().catch(() => {}); window._vadCtx = null; }
         if (window._mediaStream) { window._mediaStream.getTracks().forEach(t => t.stop()); window._mediaStream = null; }
         window._chunks = [];
       `);
+      asrEngine.cancelStream();
       return { success: true };
     } catch (e) {
       return { success: true };
+    }
+  });
+
+  // 接收实时音频块
+  ipcMain.on('asr:audio-chunk', (event, pcm: Float32Array) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      asrEngine.pushChunk(pcm).then((partialText) => {
+        if (partialText) {
+          mainWindow.webContents.send('asr:progress', { type: 'partial', text: partialText });
+        }
+      });
+    }
+  });
+
+  // 处理 VAD 分段
+  ipcMain.on('asr:segment-end', async () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const text = await asrEngine.flushStream();
+      if (text) {
+        mainWindow.webContents.send('asr:progress', { type: 'final', text, segmentId: Date.now().toString() });
+      }
     }
   });
 
