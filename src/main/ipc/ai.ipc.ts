@@ -69,15 +69,20 @@ export function registerAiIpc(mainWindow: BrowserWindow | null): void {
   });
 
   // 流式润色 (ASR 后处理)
-  ipcMain.on('ai-polish-stream', async (event, args: { text: string; streamId: string }) => {
-    const { text, streamId } = args;
+  ipcMain.on('ai-polish-stream', async (event, args: { text: string; streamId: string; previousText?: string }) => {
+    const { text, streamId, previousText } = args;
     const online = net.isOnline();
     if (!text || !text.trim()) {
       event.sender.send('ai-polish-chunk', { streamId, type: 'done', content: '' });
       return;
     }
 
-    const prompt = `你是一个专业的备忘录文本润色助手。请整理以下语音识别文本，去除 '啊'、'那个' 等无意义的语气词，修正语法错误，保持原意不变，直接输出结果，不要解释。待润色文本：\n${text}`;
+    // 将前文作为上下文传入，但要求只输出对当前句子的润色结果
+    const prompt = `你是一个专业的备忘录文本润色助手。请润色以下最新的语音识别文本，去除语气词，修正语法，并根据上下文调整标点符号（例如：如果前文未完，可以不用句号；如果接在上下文中，可连贯阅读）。
+请注意：**直接输出当前待润色文本的最终结果，不要输出前文，不要有任何解释**。
+
+${previousText ? `【前文上下文参考】：\n${previousText}\n\n` : ''}【当前待润色文本】：\n${text}`;
+    
     const messages = [{ role: 'user', content: prompt }];
 
     const emit = (chunk: any) => {

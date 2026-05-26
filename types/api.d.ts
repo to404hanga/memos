@@ -141,7 +141,7 @@ export interface ElectronAPI {
 
   // ==================== 语音识别 (ASR) & 流式润色 ====================
   /** 发送需要流式润色的单句 */
-  aiPolishStream: (args: { text: string; streamId: string }) => void;
+  aiPolishStream: (args: { text: string; streamId: string; previousText?: string }) => void;
   /** 监听润色流返回结果 */
   onAiPolishChunk: (callback: (chunk: { streamId: string; content?: string; type: 'chunk' | 'done' | 'error'; error?: string }) => void) => () => void;
 

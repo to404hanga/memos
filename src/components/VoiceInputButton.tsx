@@ -90,8 +90,23 @@ export default function VoiceInputButton({ currentInput, onTextUpdate, disabled 
           segmentsRef.current.push(newSeg);
           updateComposedText();
 
-          // 触发 LLM 润色
-          window.api.aiPolishStream({ text: progress.text, streamId: progress.segmentId });
+          // 提取上下文（如果有 baseText 或者之前的段落），只取最后 50 个字作为参考
+          let previousText = baseTextRef.current;
+          const segsText = segmentsRef.current
+            .slice(0, -1) // 排除当前这一段
+            .map(s => s.polished || s.raw)
+            .filter(Boolean)
+            .join(' ');
+          
+          if (segsText) previousText += (previousText ? ' ' : '') + segsText;
+          previousText = previousText.slice(-50); // 避免上下文过长
+
+          // 触发 LLM 润色，带上上下文
+          window.api.aiPolishStream({ 
+            text: progress.text, 
+            streamId: progress.segmentId,
+            previousText
+          });
         }
       });
     }
