@@ -95,7 +95,8 @@ ${previousText ? `【前文上下文参考】：\n${previousText}\n\n` : ''}【�
 
     try {
       // 这里的 modelId 不传会使用 Auto 模式，或可由前端指定
-      const r = await callLLM(messages, online, { onDelta: emit }, mainWindow);
+      // 强制关闭思考模式，确保流式润色速度和内容纯净
+      const r = await callLLM(messages, online, { onDelta: emit, disableThinking: true }, mainWindow);
       if (!event.sender.isDestroyed()) {
         event.sender.send('ai-polish-chunk', { streamId, type: 'done' });
       }
