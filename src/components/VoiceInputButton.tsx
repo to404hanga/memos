@@ -33,6 +33,10 @@ export default function VoiceInputButton({ currentInput, onTextUpdate, disabled 
   const partialTextRef = useRef<string>(''); // 当前正在说的未成句的片段
   const segmentsRef = useRef<SpeechSegment[]>([]); // 已成句并进入润色的分段
 
+  // 触发重渲染的 dummy state
+  const [, setTick] = useState(0);
+  const forceUpdate = useCallback(() => setTick(t => t + 1), []);
+
   // 计算并更新给父组件的文本
   const updateComposedText = useCallback(() => {
     let text = baseTextRef.current;
@@ -88,6 +92,7 @@ export default function VoiceInputButton({ currentInput, onTextUpdate, disabled 
           };
           segmentsRef.current.push(newSeg);
           updateComposedText();
+          forceUpdate(); // 触发 UI 更新显示 "润色中..."
 
           // 提取上下文（如果有 baseText 或者之前的段落），只取最后 50 个字作为参考
           let previousText = baseTextRef.current;
@@ -121,9 +126,11 @@ export default function VoiceInputButton({ currentInput, onTextUpdate, disabled 
           seg.polished += content;
         } else if (chunk.type === 'done') {
           seg.status = 'done';
+          forceUpdate(); // 强制重渲染以清除 "润色中..."
         } else if (chunk.type === 'error') {
           seg.status = 'error';
           seg.polished = seg.raw; // 发生错误则回退为原始文本
+          forceUpdate(); // 强制重渲染
         }
         updateComposedText();
       });
