@@ -170,6 +170,15 @@ export interface ElectronAPI {
   /** 监听流式识别进度 */
   onAsrProgress: (callback: (progress: { type: 'partial' | 'final'; text: string; segmentId?: string }) => void) => () => void;
 
+  /** 获取 ASR 热词配置 */
+  asrGetHotwords: () => Promise<string>;
+  /** 设置 ASR 热词配置 */
+  asrSetHotwords: (hotwords: string) => Promise<boolean>;
+  /** 获取 ASR 纠错映射表 (JSON string) */
+  asrGetCorrectionMap: () => Promise<string>;
+  /** 设置 ASR 纠错映射表 (JSON string) */
+  asrSetCorrectionMap: (map: string) => Promise<boolean>;
+
   // ==================== 事件监听 ====================
 
   /** 监听提醒事件（主进程调度器触发时通知渲染进程弹窗），返回取消监听函数 */

@@ -95,6 +95,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('asr:progress', handler);
     return () => ipcRenderer.removeListener('asr:progress', handler);
   },
+  asrGetHotwords: () => ipcRenderer.invoke('asr:get-hotwords'),
+  asrSetHotwords: (hotwords) => ipcRenderer.invoke('asr:set-hotwords', hotwords),
+  asrGetCorrectionMap: () => ipcRenderer.invoke('asr:get-correction-map'),
+  asrSetCorrectionMap: (map) => ipcRenderer.invoke('asr:set-correction-map', map),
   onReminder: (callback) => {
     const handler = (_, data) => callback(data);
     ipcRenderer.on('reminder-triggered', handler);

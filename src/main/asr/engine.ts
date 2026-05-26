@@ -9,7 +9,9 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { app } from 'electron';
+import { getSetting } from '../database/settings.repo';
 
+// @ts-ignore
 let sherpa: typeof import('sherpa-onnx-node') | null = null;
 
 export type AsrStatus = 'not_downloaded' | 'downloading' | 'loading' | 'ready' | 'error';
@@ -62,7 +64,21 @@ class AsrEngine {
       }
 
       const modelDir = getModelDir();
-      const config = {
+      
+      // 处理热词/关键词
+      let keywordsFile = '';
+      const hotwords = getSetting('asr_hotwords');
+      if (hotwords) {
+        const keywordsPath = path.join(app.getPath('userData'), 'keywords.txt');
+        // 将热词转换为 sherpa-onnx 格式 (每行一个词)
+        const formattedKeywords = hotwords.split(/[,\n，]/).map(w => w.trim()).filter(Boolean).join('\n');
+        if (formattedKeywords) {
+          fs.writeFileSync(keywordsPath, formattedKeywords);
+          keywordsFile = keywordsPath;
+        }
+      }
+
+      const config: any = {
         modelConfig: {
           qwen3Asr: {
             convFrontend: path.join(modelDir, 'conv_frontend.onnx'),
@@ -75,6 +91,11 @@ class AsrEngine {
           debug: false,
         },
       };
+
+      if (keywordsFile) {
+        config.modelConfig.keywordsFile = keywordsFile;
+        config.modelConfig.keywordsScore = 1.5; // 默认权重系数
+      }
 
       this.recognizer = new sherpa!.OfflineRecognizer(config);
       this.status = 'ready';

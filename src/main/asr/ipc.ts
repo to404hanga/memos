@@ -7,11 +7,14 @@
  * - asr:preload   预加载模型到内存
  * - asr:download  下载模型文件（带进度事件）
  * - asr:cancel-download  取消模型下载
+ * - asr:get-hotwords / asr:set-hotwords  热词配置
+ * - asr:get-correction-map / asr:set-correction-map  纠错映射
  */
 import { ipcMain, BrowserWindow, systemPreferences } from 'electron';
 import * as path from 'path';
 import { asrEngine } from './engine';
 import { modelDownloader } from './downloader';
+import { getSetting, setSetting } from '../database/settings.repo';
 
 // 隐藏录音窗口（渲染进程 getUserMedia 会 crash 主窗口，所以用独立窗口）
 let recordWindow: BrowserWindow | null = null;
@@ -266,5 +269,20 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
   ipcMain.handle('asr:cancel-download', () => {
     modelDownloader.cancel();
     return { success: true };
+  });
+
+  // ASR 优化配置
+  ipcMain.handle('asr:get-hotwords', () => getSetting('asr_hotwords'));
+  ipcMain.handle('asr:set-hotwords', (_, hotwords: string) => {
+    setSetting('asr_hotwords', hotwords);
+    // 修改热词后，销毁当前引擎实例，以便下次使用时重新加载关键词文件
+    asrEngine.destroy();
+    return true;
+  });
+
+  ipcMain.handle('asr:get-correction-map', () => getSetting('asr_correction_map'));
+  ipcMain.handle('asr:set-correction-map', (_, map: string) => {
+    setSetting('asr_correction_map', map);
+    return true;
   });
 }

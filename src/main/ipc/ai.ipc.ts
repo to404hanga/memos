@@ -70,19 +70,42 @@ export function registerAiIpc(mainWindow: BrowserWindow | null): void {
 
   // 流式润色 (ASR 后处理)
   ipcMain.on('ai-polish-stream', async (event, args: { text: string; streamId: string; previousText?: string }) => {
-    const { text, streamId, previousText } = args;
+    let { text, streamId, previousText } = args;
     const online = net.isOnline();
     if (!text || !text.trim()) {
       event.sender.send('ai-polish-chunk', { streamId, type: 'done', content: '' });
       return;
     }
 
-    // 将前文作为上下文传入，但要求只输出对当前句子的润色结果
+    // 1. 基于规则的硬纠错 (Correction Map)
+    const correctionMapStr = getSetting('asr_correction_map');
+    if (correctionMapStr) {
+      try {
+        const correctionMap = JSON.parse(correctionMapStr);
+        for (const [wrong, right] of Object.entries(correctionMap)) {
+          if (typeof right === 'string') {
+            text = text.replace(new RegExp(wrong, 'g'), right);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse asr_correction_map', e);
+      }
+    }
+
+    // 2. 获取热词/词库上下文
+    const hotwords = getSetting('asr_hotwords');
+
+    // 3. 构造 Prompt
     const prompt = `你是一个输入法文本润色引擎。用户正在通过语音进行输入，请你对最新的一段语音识别结果进行润色。
 
 处理规则：
-1. 去除“啊”、“那个”、“就是”等无意义的口语化语气词。
-2. 修正明显的识别错误或语病。
+1. **去口癖与逻辑清理**：
+   - 严格去除“啊”、“那个”、“就是”、“然后”、“呃”、“就是说”等无意义的口语化语气词。
+   - 清理连续重复的词语（如“然后然后”、“就是就是”）。
+   - 在不改变原意的前提下，缩减不必要的垫句词，使表达更干脆。
+2. **修正识别错误**：
+   - 修正明显的识别错误或语病。
+${hotwords ? `   - 参考以下【用户词库/热词】，纠正同音字或术语错误：\n     ${hotwords}\n` : ''}
 3. **标点符号规则**：
    - 如果用户只是停顿（即当前文本未完结），尽量使用逗号或不加标点。
    - 如果结合【前文】来看，当前文本是一个连贯的词组，请顺着前文的语气，不要强行加句号。
