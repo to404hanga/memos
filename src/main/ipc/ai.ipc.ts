@@ -102,8 +102,8 @@ ${previousText ? `【前文参考】（仅用于理解语境，绝对不要重�
     };
 
     try {
-      // 这里的 modelId 不传会使用 Auto 模式，或可由前端指定
-      // 强制关闭思考模式，确保流式润色速度和内容纯净
+      // 强制使用 Auto 模式（按优先级选择模型），无视各模型原本的配置，统一关闭思考模式
+      // 确保流式润色拥有最快的响应速度和最纯净的输出
       const r = await callLLM(messages, online, { onDelta: emit, disableThinking: true }, mainWindow);
       if (!event.sender.isDestroyed()) {
         event.sender.send('ai-polish-chunk', { streamId, type: 'done' });
