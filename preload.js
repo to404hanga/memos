@@ -90,6 +90,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('asr:download-progress', handler);
     return () => ipcRenderer.removeListener('asr:download-progress', handler);
   },
+  onAsrProgress: (callback) => {
+    const handler = (_, progress) => callback(progress);
+    ipcRenderer.on('asr:progress', handler);
+    return () => ipcRenderer.removeListener('asr:progress', handler);
+  },
   onReminder: (callback) => {
     const handler = (_, data) => callback(data);
     ipcRenderer.on('reminder-triggered', handler);

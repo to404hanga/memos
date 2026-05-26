@@ -167,6 +167,8 @@ export interface ElectronAPI {
   asrCancelDownload: () => Promise<{ success: boolean }>;
   /** 监听模型下载进度 */
   onAsrDownloadProgress: (callback: (progress: AsrDownloadProgress) => void) => () => void;
+  /** 监听流式识别进度 */
+  onAsrProgress: (callback: (progress: { type: 'partial' | 'final'; text: string; segmentId?: string }) => void) => () => void;
 
   // ==================== 事件监听 ====================
 
