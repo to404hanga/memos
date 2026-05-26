@@ -47,7 +47,13 @@ export async function callOpenAi(
 ): Promise<LLMResult> {
   const url = joinUrl(provider.baseUrl, '/chat/completions');
 
-  const payloadMessages: any[] = [{ role: 'system', content: systemPrompt }];
+  // 如果模型显式关闭了思考，追加系统指令强制模型不要思考，降低 TTFT
+  let finalSystemPrompt = systemPrompt;
+  if (model.thinking === false) {
+    finalSystemPrompt += '\n\nIMPORTANT: Respond DIRECTLY and IMMEDIATELY. DO NOT use any internal reasoning, chain-of-thought, or <think> tags. Just output the final result.';
+  }
+
+  const payloadMessages: any[] = [{ role: 'system', content: finalSystemPrompt }];
   for (const m of messages) {
     if (m.role === 'tool') {
       payloadMessages.push({ role: 'tool', tool_call_id: m.toolCallId, content: m.content || '' });
@@ -107,7 +113,7 @@ export async function callOpenAi(
       const delta = choice.delta || {};
 
       const reasoningDelta = delta.reasoning_content || delta.reasoning;
-      if (reasoningDelta) {
+      if (reasoningDelta && model.thinking !== false) {
         thinking += reasoningDelta;
         onDelta({ type: 'thinking_delta', text: reasoningDelta });
       }
@@ -144,6 +150,12 @@ export async function callAnthropic(
 ): Promise<LLMResult> {
   const url = joinUrl(provider.baseUrl, '/messages');
 
+  // 如果模型显式关闭了思考，追加系统指令强制模型不要思考
+  let finalSystemPrompt = systemPrompt;
+  if (model.thinking === false) {
+    finalSystemPrompt += '\n\nIMPORTANT: Respond DIRECTLY and IMMEDIATELY. DO NOT use any internal reasoning, chain-of-thought, or <think> tags. Just output the final result.';
+  }
+
   const claudeMessages: any[] = [];
   for (const m of messages) {
     if (m.role === 'tool') {
@@ -164,10 +176,19 @@ export async function callAnthropic(
   if (model.thinking) {
     body.thinking = { type: 'enabled', budget_tokens: 8000 };
   }
-  const headers: Record<string, string> = { 'x-api-key': provider.apiKey, 'anthropic-version': '2023-06-01' };
+
+  if (body.tools && body.tools.length === 0) {
+    delete body.tools;
+  }
+
+  const headers: Record<string, string> = { 
+    'x-api-key': provider.apiKey, 
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true'
+  };
 
   if (!onDelta) {
-    const { data } = await httpJson({ url, headers, body, timeoutMs: 30000 });
+    const { data } = await httpJson({ url, headers, body, timeoutMs: 60000 });
     let content = '';
     const toolCalls: any[] = [];
     let thinkingText: string | undefined;
@@ -175,7 +196,7 @@ export async function callAnthropic(
       if (block.type === 'text') content += block.text;
       else if (block.type === 'tool_use') {
         toolCalls.push({ id: block.id || uuidv4(), name: block.name, arguments: block.input || {} });
-      } else if (block.type === 'thinking') {
+      } else if (block.type === 'thinking' && model.thinking !== false) {
         thinkingText = (thinkingText || '') + (block.thinking || '');
       }
     }
@@ -208,7 +229,7 @@ export async function callAnthropic(
         if (d.type === 'text_delta' && d.text) {
           block.text += d.text; content += d.text;
           onDelta({ type: 'content_delta', text: d.text });
-        } else if (d.type === 'thinking_delta' && d.thinking) {
+        } else if (d.type === 'thinking_delta' && d.thinking && model.thinking !== false) {
           block.thinking += d.thinking; thinking += d.thinking;
           onDelta({ type: 'thinking_delta', text: d.thinking });
         } else if (d.type === 'input_json_delta' && d.partial_json) {
@@ -231,7 +252,13 @@ export async function callOllama(
 ): Promise<LLMResult> {
   const url = joinUrl(provider.baseUrl, '/api/chat');
 
-  const ollamaMessages: any[] = [{ role: 'system', content: systemPrompt }];
+  // 如果模型显式关闭了思考，追加系统指令强制模型不要思考
+  let finalSystemPrompt = systemPrompt;
+  if (model.thinking === false) {
+    finalSystemPrompt += '\n\nIMPORTANT: Respond DIRECTLY and IMMEDIATELY. DO NOT use any internal reasoning, chain-of-thought, or <think> tags. Just output the final result.';
+  }
+
+  const ollamaMessages: any[] = [{ role: 'system', content: finalSystemPrompt }];
   for (const m of messages) {
     if (m.role === 'tool') {
       ollamaMessages.push({ role: 'tool', content: m.content || '' });
@@ -246,7 +273,11 @@ export async function callOllama(
   }
 
   const body: any = { model: model.name, messages: ollamaMessages, tools, options: { temperature: 0.3 } };
-  if (model.thinking) body.think = true;
+  if (model.thinking) {
+    body.think = true;
+  } else if (model.thinking === false) {
+    body.think = false;
+  }
 
   if (!onDelta) {
     body.stream = false;
@@ -255,7 +286,11 @@ export async function callOllama(
     const toolCalls = (msg.tool_calls || []).map((tc: any) => ({
       id: uuidv4(), name: tc.function && tc.function.name, arguments: (tc.function && tc.function.arguments) || {},
     })).filter((tc: any) => tc.name);
-    return { content: msg.content || '', toolCalls, thinking: msg.thinking || undefined };
+    
+    // 如果模型不思考，强行过滤掉 thinking
+    const finalThinking = model.thinking === false ? undefined : msg.thinking || undefined;
+    
+    return { content: msg.content || '', toolCalls, thinking: finalThinking };
   }
 
   // 流式（NDJSON）
@@ -276,7 +311,7 @@ export async function callOllama(
         content += msg.content;
         onDelta({ type: 'content_delta', text: msg.content });
       }
-      if (typeof msg.thinking === 'string' && msg.thinking) {
+      if (typeof msg.thinking === 'string' && msg.thinking && model.thinking !== false) {
         thinking += msg.thinking;
         onDelta({ type: 'thinking_delta', text: msg.thinking });
       }
