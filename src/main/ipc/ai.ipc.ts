@@ -82,8 +82,9 @@ export function registerAiIpc(mainWindow: BrowserWindow | null): void {
 
     const emit = (chunk: any) => {
       if (event.sender.isDestroyed()) return;
-      if (chunk.type === 'content_delta' && chunk.content) {
-        event.sender.send('ai-polish-chunk', { streamId, type: 'chunk', content: chunk.content });
+      // 注意：callLLM 的 onDelta 吐出的字段名是 text
+      if (chunk.type === 'content_delta' && chunk.text) {
+        event.sender.send('ai-polish-chunk', { streamId, type: 'chunk', content: chunk.text });
       }
     };
 
