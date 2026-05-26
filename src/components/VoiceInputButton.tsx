@@ -36,19 +36,18 @@ export default function VoiceInputButton({ currentInput, onTextUpdate, disabled 
   // 计算并更新给父组件的文本
   const updateComposedText = useCallback(() => {
     let text = baseTextRef.current;
-    if (text && !text.endsWith('\n') && !text.endsWith(' ')) text += ' ';
     
     // 拼接已确定的片段（优先使用 polished 结果）
     const segsText = segmentsRef.current
       .map(s => s.polished || s.raw)
       .filter(Boolean)
-      .join(' ');
+      .join(''); // 取消了默认加空格，因为中文排版通常不需要，标点符号由 LLM 控制
     
     if (segsText) text += segsText;
     
     // 拼接当前正在说的 partial text
     if (partialTextRef.current) {
-      text += (segsText ? ' ' : '') + partialTextRef.current;
+      text += partialTextRef.current;
     }
     
     onTextUpdate(text);
@@ -117,7 +116,9 @@ export default function VoiceInputButton({ currentInput, onTextUpdate, disabled 
         if (!seg) return;
 
         if (chunk.type === 'chunk' && chunk.content) {
-          seg.polished += chunk.content;
+          // 清理可能存在的前导空白或换行
+          const content = seg.polished ? chunk.content : chunk.content.replace(/^\s+/, '');
+          seg.polished += content;
         } else if (chunk.type === 'done') {
           seg.status = 'done';
         } else if (chunk.type === 'error') {
