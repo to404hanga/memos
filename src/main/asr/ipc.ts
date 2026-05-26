@@ -117,8 +117,8 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
               // 静音中
               if (!window._silenceStart) {
                 window._silenceStart = Date.now();
-              } else if (Date.now() - window._silenceStart > 1500) {
-                // 静音超过 1.5 秒，触发分段
+              } else if (Date.now() - window._silenceStart > 800) {
+                // 静音超过 0.8 秒，触发分段
                 window._hasVoice = false;
                 window._silenceStart = 0;
                 require('electron').ipcRenderer.send('asr:segment-end');
@@ -150,8 +150,11 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
   ipcMain.handle('asr:stop-recording', async () => {
     try {
       const win = getRecordWindow();
-      const result = await win.webContents.executeJavaScript(`
-        new Promise((resolve, reject) => {
+      await win.webContents.executeJavaScript(`
+        new Promise((resolve) => {
+          // 设置标志位，停止处理新数据
+          window._vadStopped = true;
+
           // 清理 VAD
           if (window._vadInterval) { clearInterval(window._vadInterval); window._vadInterval = null; }
           if (window._processor) { window._processor.disconnect(); window._processor = null; }
@@ -181,11 +184,11 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
     try {
       const win = getRecordWindow();
       await win.webContents.executeJavaScript(`
+        window._vadStopped = true;
         if (window._processor) { window._processor.disconnect(); window._processor = null; }
         if (window._vadInterval) { clearInterval(window._vadInterval); window._vadInterval = null; }
         if (window._vadCtx) { window._vadCtx.close().catch(() => {}); window._vadCtx = null; }
         if (window._mediaStream) { window._mediaStream.getTracks().forEach(t => t.stop()); window._mediaStream = null; }
-        window._chunks = [];
       `);
       asrEngine.cancelStream();
       return { success: true };
