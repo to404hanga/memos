@@ -85,7 +85,8 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
             const inputData = e.inputBuffer.getChannelData(0);
             // 复制一份数据，通过 IPC 发送给主进程
             const pcm = new Float32Array(inputData);
-            require('electron').ipcRenderer.send('asr:audio-chunk', pcm);
+            // 转换为 Uint8Array 确保 IPC 序列化正确
+            require('electron').ipcRenderer.send('asr:audio-chunk', new Uint8Array(pcm.buffer));
           };
 
           window._vadAnalyser = window._vadCtx.createAnalyser();
@@ -194,8 +195,10 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
   });
 
   // 接收实时音频块
-  ipcMain.on('asr:audio-chunk', (event, pcm: Float32Array) => {
+  ipcMain.on('asr:audio-chunk', (event, rawData: Uint8Array) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
+      // 从 IPC 传过来的 Uint8Array/Buffer 还原为 Float32Array
+      const pcm = new Float32Array(rawData.buffer, rawData.byteOffset, rawData.byteLength / 4);
       asrEngine.pushChunk(pcm).then((partialText) => {
         if (partialText) {
           mainWindow.webContents.send('asr:progress', { type: 'partial', text: partialText });
