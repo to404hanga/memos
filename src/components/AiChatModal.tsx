@@ -16,6 +16,7 @@ import AiModelSelector from './AiModelSelector';
 import AiHistoryPanel from './AiHistoryPanel';
 import VoiceInputButton from './VoiceInputButton';
 import { useAiChat } from '../hooks/useAiChat';
+import { useVoiceInput } from '../hooks/useVoiceInput';
 import type { AiCreateMemoArgs, AiToolCall, MemoFormData } from '../../types/global';
 
 interface Props {
@@ -28,6 +29,10 @@ interface Props {
 
 export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attachedMemo, attachKey }: Props): React.ReactElement {
   const chat = useAiChat();
+  const voice = useVoiceInput(useCallback((text) => {
+    chat.setInput(prev => prev + text);
+  }, [chat.setInput]));
+
   const [showSettings, setShowSettings] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -168,16 +173,33 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
                 ))}
               </div>
             )}
-            <textarea
-              ref={textareaRef}
-              className="ai-composer-input"
-              value={chat.input}
-              onChange={(e) => chat.setInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder={chat.usable === false ? '请先配置可用的模型…' : '输入消息，Enter 发送，Shift+Enter 换行'}
-              disabled={chat.sending}
-              rows={1}
-            />
+            <div className="ai-composer-input-wrap">
+              <textarea
+                ref={textareaRef}
+                className="ai-composer-input"
+                value={chat.input}
+                onChange={(e) => chat.setInput(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder={chat.usable === false ? '请先配置可用的模型…' : '输入消息，Enter 发送，Shift+Enter 换行'}
+                disabled={chat.sending}
+                rows={1}
+              />
+              
+              {(voice.segments.length > 0 || voice.partialText) && (
+                <div className="ai-voice-segments">
+                  {voice.segments.map(s => (
+                    <span key={s.id} className="ai-voice-segment polishing">
+                      {s.polished || s.raw}
+                    </span>
+                  ))}
+                  {voice.partialText && (
+                    <span className="ai-voice-segment partial">
+                      {voice.partialText}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="ai-composer-toolbar">
               <button
                 className="ai-composer-model"
@@ -216,8 +238,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
                     </div>
                   )}
                   <VoiceInputButton
-                    currentInput={chat.input}
-                    onTextUpdate={chat.setInput}
+                    onRecordingStateChange={voice.setIsRecording}
                     disabled={chat.sending}
                   />
                   <button
