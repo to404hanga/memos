@@ -120,8 +120,8 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
               // 静音中
               if (!window._silenceStart) {
                 window._silenceStart = Date.now();
-              } else if (Date.now() - window._silenceStart > 800) {
-                // 静音超过 0.8 秒，触发分段
+              } else if (Date.now() - window._silenceStart > 600) {
+                // 静音超过 0.6 秒，触发分段
                 window._hasVoice = false;
                 window._silenceStart = 0;
                 require('electron').ipcRenderer.send('asr:segment-end');
@@ -152,26 +152,22 @@ export function registerAsrIpc(mainWindow: BrowserWindow | null): void {
   // 停止录音并返回 PCM 数据
   ipcMain.handle('asr:stop-recording', async () => {
     try {
-      const win = getRecordWindow();
-      await win.webContents.executeJavaScript(`
-        new Promise((resolve) => {
-          // 设置标志位，停止处理新数据
-          window._vadStopped = true;
+      if (recordWindow && !recordWindow.isDestroyed()) {
+        recordWindow.webContents.executeJavaScript(`
+          (function() {
+            window._vadStopped = true;
+            if (window._vadInterval) { clearInterval(window._vadInterval); window._vadInterval = null; }
+            if (window._processor) { window._processor.disconnect(); window._processor = null; }
+            if (window._vadCtx) { window._vadCtx.close().catch(() => {}); window._vadCtx = null; }
+            if (window._mediaStream) {
+              window._mediaStream.getTracks().forEach(t => t.stop());
+              window._mediaStream = null;
+            }
+          })()
+        `).catch(console.error);
+      }
 
-          // 清理 VAD
-          if (window._vadInterval) { clearInterval(window._vadInterval); window._vadInterval = null; }
-          if (window._processor) { window._processor.disconnect(); window._processor = null; }
-          if (window._vadCtx) { window._vadCtx.close().catch(() => {}); window._vadCtx = null; }
-
-          if (window._mediaStream) {
-            window._mediaStream.getTracks().forEach(t => t.stop());
-            window._mediaStream = null;
-          }
-          resolve(true);
-        })
-      `);
-
-      // 通知引擎结束当前流，并返回最终识别结果
+      // 立即执行 flushStream，不再等待 executeJavaScript 的 Promise 结果
       const text = await asrEngine.flushStream();
       if (text && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('asr:progress', { type: 'final', text, segmentId: Date.now().toString() });

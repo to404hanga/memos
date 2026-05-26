@@ -96,19 +96,20 @@ export default function VoiceInputButton({ onRecordingStateChange, disabled }: P
   }, [modelState, voiceState]);
 
   const stopAndRecognize = useCallback(async () => {
+    // 立即清除定时器和重置 UI 状态，确保按钮秒变 idle
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-
-    try {
-      await window.api.asrStopRecording();
-    } catch (err: any) {
-      setError(err.message || '停止失败');
-    }
-
     setVoiceState('idle');
     setDuration(0);
+
+    try {
+      // 异步通知主进程停止，不阻塞 UI 状态变更
+      window.api.asrStopRecording();
+    } catch (err: any) {
+      console.error('Failed to stop recording:', err);
+    }
   }, []);
 
   const stopRef = useRef(stopAndRecognize);
