@@ -65,7 +65,16 @@ contextBridge.exposeInMainWorld('api', {
   aiSaveConversation: (conv) => ipcRenderer.invoke('ai-save-conversation', conv),
   aiDeleteConversation: (id) => ipcRenderer.invoke('ai-delete-conversation', id),
   aiClearConversations: () => ipcRenderer.invoke('ai-clear-conversations'),
-  // ASR 语音识别
+
+  // ==================== 语音识别 (ASR) & 流式润色 ====================
+
+  aiPolishStream: (args) => ipcRenderer.send('ai-polish-stream', args),
+  onAiPolishChunk: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('ai-polish-chunk', handler);
+    return () => ipcRenderer.removeListener('ai-polish-chunk', handler);
+  },
+
   asrGetStatus: () => ipcRenderer.invoke('asr:status'),
   asrRequestMicPermission: () => ipcRenderer.invoke('asr:request-mic-permission'),
   asrStartRecording: () => ipcRenderer.invoke('asr:start-recording'),

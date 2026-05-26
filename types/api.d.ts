@@ -139,7 +139,11 @@ export interface ElectronAPI {
   /** 清空所有对话历史 */
   aiClearConversations: () => Promise<boolean>;
 
-  // ==================== 语音识别 (ASR) ====================
+  // ==================== 语音识别 (ASR) & 流式润色 ====================
+  /** 发送需要流式润色的单句 */
+  aiPolishStream: (args: { text: string; streamId: string }) => void;
+  /** 监听润色流返回结果 */
+  onAiPolishChunk: (callback: (chunk: { streamId: string; content?: string; type: 'chunk' | 'done' | 'error'; error?: string }) => void) => () => void;
 
   /** 获取 ASR 引擎/模型状态 */
   asrGetStatus: () => Promise<AsrStatusType>;

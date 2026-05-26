@@ -68,6 +68,38 @@ export function registerAiIpc(mainWindow: BrowserWindow | null): void {
     return true;
   });
 
+  // 流式润色 (ASR 后处理)
+  ipcMain.on('ai-polish-stream', async (event, args: { text: string; streamId: string }) => {
+    const { text, streamId } = args;
+    const online = net.isOnline();
+    if (!text || !text.trim()) {
+      event.sender.send('ai-polish-chunk', { streamId, type: 'done', content: '' });
+      return;
+    }
+
+    const prompt = `你是一个专业的备忘录文本润色助手。请整理以下语音识别文本，去除 '啊'、'那个' 等无意义的语气词，修正语法错误，保持原意不变，直接输出结果，不要解释。待润色文本：\n${text}`;
+    const messages = [{ role: 'user', content: prompt }];
+
+    const emit = (chunk: any) => {
+      if (event.sender.isDestroyed()) return;
+      if (chunk.type === 'content_delta' && chunk.content) {
+        event.sender.send('ai-polish-chunk', { streamId, type: 'chunk', content: chunk.content });
+      }
+    };
+
+    try {
+      // 这里的 modelId 不传会使用 Auto 模式，或可由前端指定
+      const r = await callLLM(messages, online, { onDelta: emit }, mainWindow);
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('ai-polish-chunk', { streamId, type: 'done' });
+      }
+    } catch (err: any) {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('ai-polish-chunk', { streamId, type: 'error', error: err.message || String(err) });
+      }
+    }
+  });
+
   // 流式 AI Chat
   ipcMain.on('ai-chat-stream', async (event, args: any) => {
     const online = net.isOnline();
