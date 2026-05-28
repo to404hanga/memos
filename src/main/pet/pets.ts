@@ -124,6 +124,8 @@ export function getPetGifPath(petId: string, state: string): string | null {
     sleeping: 'waiting',
     review: 'review',
     failed: 'failed',
+    running_left: 'running-left',
+    running_right: 'running-right',
   };
 
   const keyword = STATE_KEYWORD_MAP[state] || 'idle';

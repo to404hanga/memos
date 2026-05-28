@@ -3,7 +3,7 @@
  * 管理桌宠的动画状态、当前宠物、位置、可见性
  */
 
-export type PetState = 'idle' | 'reminder' | 'ai_working' | 'all_done' | 'overdue' | 'sleeping' | 'review' | 'failed';
+export type PetState = 'idle' | 'reminder' | 'ai_working' | 'all_done' | 'overdue' | 'sleeping' | 'review' | 'failed' | 'running_left' | 'running_right';
 
 export interface PetStateContext {
   currentState: PetState;

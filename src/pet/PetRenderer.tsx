@@ -10,6 +10,8 @@ const STATE_GIF_MAP: Record<string, string> = {
   sleeping: 'waiting.gif',
   review: 'review.gif',
   failed: 'failed.gif',
+  running_left: 'running-left.gif',
+  running_right: 'running-right.gif',
 };
 
 interface PetState {

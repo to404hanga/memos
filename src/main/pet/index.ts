@@ -8,10 +8,12 @@ import { createPetWindow } from './window';
 import { PetStateMachine } from './state';
 import { registerPetIpc } from './ipc';
 import { getDefaultPetId } from './pets';
+import { PetRoaming } from './roaming';
 import { getSetting } from '../database/settings.repo';
 
 let petWindow: BrowserWindow | null = null;
 let stateMachine: PetStateMachine | null = null;
+let roaming: PetRoaming | null = null;
 
 export function initPetModule(): void {
   // 从数据库恢复设置
@@ -47,8 +49,13 @@ export function initPetModule(): void {
     }
   });
 
+  // 启动随机漫游
+  roaming = new PetRoaming(petWindow, stateMachine);
+  roaming.start();
+
   // 窗口关闭时清理
   petWindow.on('closed', () => {
+    if (roaming) roaming.stop();
     petWindow = null;
   });
 }
