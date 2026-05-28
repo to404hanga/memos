@@ -69,4 +69,7 @@ contextBridge.exposeInMainWorld('petApi', {
 
   // Agent 状态
   setAgentState: (state) => ipcRenderer.send('pet:set-agent-state', state),
+
+  // 通知主窗口刷新备忘录
+  notifyMemosChanged: () => ipcRenderer.send('pet:notify-memos-changed'),
 });

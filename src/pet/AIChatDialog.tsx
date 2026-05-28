@@ -7,7 +7,6 @@ import { useAiChat } from '../hooks/useAiChat';
 import AiMessageList from '../components/AiMessageList';
 import { aiArgsToMemo } from '../components/AiPreviewCard';
 import type { AiCreateMemoArgs, AiToolCall } from '../../types/global';
-import '../styles.css';
 
 interface Props {
   onClose: () => void;
@@ -56,6 +55,8 @@ export const AIChatDialog: React.FC<Props> = ({ onClose }) => {
     const args = (tc.arguments || {}) as AiCreateMemoArgs;
     const memo = aiArgsToMemo(args);
     await (window as any).api.addMemo(memo);
+    // 通知主窗口刷新备忘录列表
+    (window as any).petApi.notifyMemosChanged();
     chat.setMessages((prev) => prev.map((m, i) => {
       if (i !== msgIdx) return m;
       return { ...m, toolStatus: { ...(m.toolStatus || {}), [tc.id]: 'created' } };

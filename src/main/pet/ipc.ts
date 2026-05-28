@@ -97,6 +97,13 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
     }
   });
 
+  // 通知主窗口刷新备忘录列表
+  ipcMain.on('pet:notify-memos-changed', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('memos-changed');
+    }
+  });
+
   // ==================== 基础状态查询 ====================
 
   ipcMain.handle('pet:get-state', () => {

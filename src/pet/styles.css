@@ -1,9 +1,11 @@
+/* 宠物窗口样式（在主应用 styles.css 之后加载，覆盖特定样式） */
+
 html, body, #pet-root {
   width: 100%;
   height: 100%;
   margin: 0;
   padding: 0;
-  background: transparent;
+  background: transparent !important;
   overflow: hidden;
   user-select: none;
 }
@@ -59,7 +61,7 @@ html, body, #pet-root {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* ==================== AI 对话框 ==================== */
+/* ==================== AI 对话框容器 ==================== */
 
 .chat-dialog {
   width: 100%;
@@ -97,41 +99,38 @@ html, body, #pet-root {
   border-radius: 2px;
 }
 
-.chat-empty {
-  color: rgba(255, 255, 255, 0.4);
+/* 覆盖主应用的 AI 消息气泡样式，适配宠物窗口紧凑布局 */
+.chat-dialog .ai-msg {
+  margin-bottom: 8px;
+}
+
+.chat-dialog .ai-msg-bubble {
+  max-width: 92%;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.chat-dialog .ai-msg-text {
+  font-size: 13px;
+}
+
+.chat-dialog .ai-chat-welcome {
+  padding: 16px 8px;
+}
+
+.chat-dialog .ai-chat-welcome h3 {
+  font-size: 14px;
+}
+
+.chat-dialog .ai-chat-welcome p,
+.chat-dialog .ai-chat-welcome li {
   font-size: 12px;
-  text-align: center;
-  padding: 20px 0;
 }
 
-.chat-msg {
-  margin-bottom: 6px;
-  display: flex;
-}
-
-.chat-msg-user {
-  justify-content: flex-end;
-}
-
-.chat-msg-user .chat-msg-content {
-  background: #4a9eff;
-  color: #fff;
-  border-radius: 10px 10px 2px 10px;
-}
-
-.chat-msg-assistant .chat-msg-content {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e0e0e0;
-  border-radius: 10px 10px 10px 2px;
-}
-
-.chat-msg-content {
-  padding: 6px 10px;
+/* 预览卡片在紧凑模式下 */
+.chat-dialog .ai-preview-card {
   font-size: 12px;
-  line-height: 1.4;
-  max-width: 85%;
-  word-wrap: break-word;
-  white-space: pre-wrap;
 }
 
 /* 输入区 */
@@ -166,8 +165,7 @@ html, body, #pet-root {
   border-color: rgba(74, 158, 255, 0.5);
 }
 
-.chat-send-btn,
-.chat-voice-btn {
+.chat-send-btn {
   width: 28px;
   height: 28px;
   border: none;
@@ -179,9 +177,6 @@ html, body, #pet-root {
   font-size: 12px;
   flex-shrink: 0;
   transition: background 0.15s;
-}
-
-.chat-send-btn {
   background: #4a9eff;
   color: #fff;
 }
@@ -202,108 +197,4 @@ html, body, #pet-root {
 
 .chat-abort-btn:hover {
   background: #c0392b;
-}
-
-.chat-voice-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.chat-voice-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.chat-voice-btn.recording {
-  background: #e74c3c;
-  animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-/* 思考过程 */
-.chat-thinking {
-  margin-bottom: 4px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.chat-thinking summary {
-  cursor: pointer;
-  user-select: none;
-  padding: 2px 0;
-}
-
-.chat-thinking-text {
-  margin: 4px 0 0;
-  padding: 6px 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
-  font-size: 11px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 120px;
-  overflow-y: auto;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-/* 工具调用步骤 */
-.chat-tool-steps {
-  margin-bottom: 4px;
-}
-
-.chat-tool-step {
-  font-size: 11px;
-  padding: 3px 0;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.chat-tool-icon {
-  margin-right: 4px;
-}
-
-.chat-tool-label {
-  font-weight: 500;
-}
-
-.chat-tool-summary {
-  color: rgba(255, 255, 255, 0.4);
-}
-
-/* 复制按钮 */
-.chat-msg-actions {
-  padding: 2px 0;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.chat-msg:hover .chat-msg-actions {
-  opacity: 1;
-}
-
-.chat-msg-actions.align-right {
-  text-align: right;
-}
-
-.chat-msg-actions.align-left {
-  text-align: left;
-}
-
-.chat-copy-btn {
-  background: none;
-  border: none;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-  opacity: 0.6;
-  pointer-events: auto;
-}
-
-.chat-copy-btn:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
 }
