@@ -217,6 +217,22 @@ function fireReminder(memo: Memo, rem: any): void {
     });
   }
 
+  // 桌宠提醒：切换为 jumping 动画 + 气泡显示待办标题
+  try {
+    const { getPetStateMachine, getPetWindow } = require('../pet');
+    const sm = getPetStateMachine();
+    const petWin = getPetWindow();
+    if (sm && petWin && !petWin.isDestroyed()) {
+      sm.transition('reminder', `⏰ ${memo.title}`);
+      // 8 秒后自动回到 idle
+      setTimeout(() => {
+        if (sm.getState().currentState === 'reminder') {
+          sm.transition('idle');
+        }
+      }, 8000);
+    }
+  } catch {}
+
   sendWebhook(memo, rem.type).catch(() => {});
 }
 
