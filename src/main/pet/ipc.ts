@@ -7,7 +7,7 @@ import { ipcMain, BrowserWindow, screen, dialog } from 'electron';
 import { PetStateMachine, PetState } from './state';
 import { getAllPets, getPetGifPath, PET_ACTIONS, importPetPack, deleteUserPet, getPetActions } from './pets';
 import { setSetting } from '../database/settings.repo';
-import { getMemoById, updateReminderTime } from '../database/memo.repo';
+import { getMemoById, updateReminderTime, updateMemoInDb } from '../database/memo.repo';
 import { reschedule } from '../scheduler';
 
 const PET_WINDOW_NORMAL = { width: 200, height: 200 };
@@ -112,7 +112,18 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
     if (!memo) return { success: false };
 
     const snoozeTime = new Date(Date.now() + minutes * 60 * 1000).toISOString();
-    updateReminderTime(memoId, snoozeTime);
+
+    // 更新 reminders 数组中的提醒时间（调度器实际读取的数据源）
+    const reminders = [...(memo.reminders || [])];
+    if (reminders.length > 0) {
+      // 将第一个提醒改为延后时间
+      reminders[0] = { ...reminders[0], type: 'once', time: snoozeTime };
+      updateMemoInDb({ ...memo, reminders, reminderTime: snoozeTime });
+    } else {
+      // 没有 reminders 数组，直接更新 reminderTime
+      updateReminderTime(memoId, snoozeTime);
+    }
+
     reschedule();
 
     if (mainWindow && !mainWindow.isDestroyed()) {
