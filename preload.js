@@ -65,6 +65,40 @@ contextBridge.exposeInMainWorld('api', {
   aiSaveConversation: (conv) => ipcRenderer.invoke('ai-save-conversation', conv),
   aiDeleteConversation: (id) => ipcRenderer.invoke('ai-delete-conversation', id),
   aiClearConversations: () => ipcRenderer.invoke('ai-clear-conversations'),
+
+  // ==================== 语音识别 (ASR) & 流式润色 ====================
+
+  aiPolishStream: (args) => ipcRenderer.send('ai-polish-stream', args),
+  onAiPolishChunk: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('ai-polish-chunk', handler);
+    return () => ipcRenderer.removeListener('ai-polish-chunk', handler);
+  },
+
+  asrGetStatus: () => ipcRenderer.invoke('asr:status'),
+  asrRequestMicPermission: () => ipcRenderer.invoke('asr:request-mic-permission'),
+  asrStartRecording: () => ipcRenderer.invoke('asr:start-recording'),
+  asrStopRecording: () => ipcRenderer.invoke('asr:stop-recording'),
+  asrCancelRecording: () => ipcRenderer.invoke('asr:cancel-recording'),
+  asrCheckVadStopped: () => ipcRenderer.invoke('asr:check-vad-stopped'),
+  asrRecognize: (audioBuffer) => ipcRenderer.invoke('asr:recognize', audioBuffer),
+  asrPreload: () => ipcRenderer.invoke('asr:preload'),
+  asrDownload: () => ipcRenderer.invoke('asr:download'),
+  asrCancelDownload: () => ipcRenderer.invoke('asr:cancel-download'),
+  onAsrDownloadProgress: (callback) => {
+    const handler = (_, progress) => callback(progress);
+    ipcRenderer.on('asr:download-progress', handler);
+    return () => ipcRenderer.removeListener('asr:download-progress', handler);
+  },
+  onAsrProgress: (callback) => {
+    const handler = (_, progress) => callback(progress);
+    ipcRenderer.on('asr:progress', handler);
+    return () => ipcRenderer.removeListener('asr:progress', handler);
+  },
+  asrGetHotwords: () => ipcRenderer.invoke('asr:get-hotwords'),
+  asrSetHotwords: (hotwords) => ipcRenderer.invoke('asr:set-hotwords', hotwords),
+  asrGetCorrectionMap: () => ipcRenderer.invoke('asr:get-correction-map'),
+  asrSetCorrectionMap: (map) => ipcRenderer.invoke('asr:set-correction-map', map),
   onReminder: (callback) => {
     const handler = (_, data) => callback(data);
     ipcRenderer.on('reminder-triggered', handler);

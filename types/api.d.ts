@@ -139,12 +139,65 @@ export interface ElectronAPI {
   /** 清空所有对话历史 */
   aiClearConversations: () => Promise<boolean>;
 
+  // ==================== 语音识别 (ASR) & 流式润色 ====================
+  /** 发送需要流式润色的单句 */
+  aiPolishStream: (args: { text: string; streamId: string; previousText?: string }) => void;
+  /** 监听润色流返回结果 */
+  onAiPolishChunk: (callback: (chunk: { streamId: string; content?: string; type: 'chunk' | 'done' | 'error'; error?: string }) => void) => () => void;
+
+  /** 获取 ASR 引擎/模型状态 */
+  asrGetStatus: () => Promise<AsrStatusType>;
+  /** 请求麦克风权限（macOS 需要主进程发起） */
+  asrRequestMicPermission: () => Promise<{ granted: boolean; status?: string }>;
+  /** 开始录音（主进程隐藏窗口中执行） */
+  asrStartRecording: () => Promise<{ success: boolean; error?: string }>;
+  /** 停止录音并识别（返回文本） */
+  asrStopRecording: () => Promise<{ success: boolean; text?: string; error?: string }>;
+  /** 取消录音 */
+  asrCancelRecording: () => Promise<{ success: boolean }>;
+  /** 检查 VAD 是否检测到静音自动停止 */
+  asrCheckVadStopped: () => Promise<{ stopped: boolean }>;
+  /** 识别音频数据（PCM Float32 16kHz mono） */
+  asrRecognize: (audioBuffer: ArrayBuffer) => Promise<{ success: boolean; text?: string; error?: string }>;
+  /** 预加载 ASR 模型到内存 */
+  asrPreload: () => Promise<{ success: boolean; error?: string }>;
+  /** 下载 ASR 模型文件 */
+  asrDownload: () => Promise<{ success: boolean; error?: string }>;
+  /** 取消模型下载 */
+  asrCancelDownload: () => Promise<{ success: boolean }>;
+  /** 监听模型下载进度 */
+  onAsrDownloadProgress: (callback: (progress: AsrDownloadProgress) => void) => () => void;
+  /** 监听流式识别进度 */
+  onAsrProgress: (callback: (progress: { type: 'partial' | 'final'; text: string; segmentId?: string }) => void) => () => void;
+
+  /** 获取 ASR 热词配置 */
+  asrGetHotwords: () => Promise<string>;
+  /** 设置 ASR 热词配置 */
+  asrSetHotwords: (hotwords: string) => Promise<boolean>;
+  /** 获取 ASR 纠错映射表 (JSON string) */
+  asrGetCorrectionMap: () => Promise<string>;
+  /** 设置 ASR 纠错映射表 (JSON string) */
+  asrSetCorrectionMap: (map: string) => Promise<boolean>;
+
   // ==================== 事件监听 ====================
 
   /** 监听提醒事件（主进程调度器触发时通知渲染进程弹窗），返回取消监听函数 */
   onReminder: (callback: (data: ReminderData) => void) => () => void;
   /** 监听备忘录数据变更事件（API Server 或其他来源修改数据时通知刷新），返回取消监听函数 */
   onMemosChanged: (callback: () => void) => () => void;
+}
+
+// ==================== ASR 类型 ====================
+
+export type AsrStatusType = 'not_downloaded' | 'downloading' | 'idle' | 'loading' | 'ready' | 'error';
+
+export interface AsrDownloadProgress {
+  file: string;
+  fileIndex: number;
+  totalFiles: number;
+  bytesDownloaded: number;
+  totalBytes: number;
+  percent: number;
 }
 
 /**

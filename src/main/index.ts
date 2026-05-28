@@ -10,7 +10,7 @@
  * 6. IPC 通信注册、提醒调度器启动、CLI HTTP 服务启动
  * 7. 窗口关闭行为：macOS 下关闭窗口仅隐藏，通过 Dock/Tray 重新显示
  */
-import { app, BrowserWindow, Tray, Menu, nativeImage, protocol, net } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, protocol, net, session } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
@@ -66,6 +66,7 @@ function createWindow(): void {
       preload: path.join(__dirname, '..', '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: false,
     },
   });
 
@@ -97,6 +98,18 @@ function createTray(): void {
 }
 
 app.whenReady().then(async () => {
+  // 允许渲染进程的媒体权限请求（麦克风等）
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media') {
+      callback(true);
+    } else {
+      callback(true);
+    }
+  });
+  session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+    return true;
+  });
+
   // 注册 local-file:// 协议处理本地文件（图片/附件）
   // 安全措施：仅允许访问 images/ 和 attachments/ 目录
   const imagesDir = path.join(userDataPath, 'images');

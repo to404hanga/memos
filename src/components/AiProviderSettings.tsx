@@ -72,6 +72,12 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
   const [promptTemplate, setPromptTemplate] = useState('');
   const [promptSaved, setPromptSaved] = useState(false);
 
+  // ASR 优化配置
+  const [asrHotwords, setAsrHotwords] = useState('');
+  const [asrCorrectionMap, setAsrCorrectionMap] = useState('');
+  const [showAsrSettings, setShowAsrSettings] = useState(false);
+  const [asrSettingsSaved, setAsrSettingsSaved] = useState(false);
+
   const reload = async () => {
     const [ps, ms] = await Promise.all([window.api.aiGetProviders(), window.api.aiGetModels()]);
     setProviders(ps);
@@ -82,7 +88,12 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
     }
   };
 
-  useEffect(() => { reload(); window.api.aiGetPromptTemplate().then(setPromptTemplate); }, []);
+  useEffect(() => {
+    reload();
+    window.api.aiGetPromptTemplate().then(setPromptTemplate);
+    window.api.asrGetHotwords().then(setAsrHotwords);
+    window.api.asrGetCorrectionMap().then(setAsrCorrectionMap);
+  }, []);
 
   // Provider 操作
   const handleAddProvider = () => setEditingProvider(emptyProviderDraft());
@@ -226,6 +237,15 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
     await window.api.aiSetPromptTemplate(promptTemplate);
     setPromptSaved(true);
     setTimeout(() => setPromptSaved(false), 2000);
+  };
+
+  const handleSaveAsrSettings = async () => {
+    await Promise.all([
+      window.api.asrSetHotwords(asrHotwords),
+      window.api.asrSetCorrectionMap(asrCorrectionMap),
+    ]);
+    setAsrSettingsSaved(true);
+    setTimeout(() => setAsrSettingsSaved(false), 2000);
   };
 
   // 拖拽排序（全局，跨 Provider）
@@ -559,6 +579,56 @@ export default function AiProviderSettings({ onClose }: Props): React.ReactEleme
                 {promptTemplate && (
                   <button className="btn-cancel" onClick={() => { setPromptTemplate(''); handleSavePrompt(); }}>恢复默认</button>
                 )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ASR 优化配置 */}
+        <div className="ai-prompt-section" style={{ borderTop: '1px solid var(--border)' }}>
+          <button
+            className="ai-prompt-toggle"
+            onClick={() => setShowAsrSettings((v) => !v)}
+          >
+            🎙️ 语音识别优化 {showAsrSettings ? '▾' : '▸'}
+          </button>
+          {showAsrSettings && (
+            <div className="ai-prompt-editor">
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 4, display: 'block' }}>
+                  ASR 热词 / 词库 (Hotwords)
+                </label>
+                <p className="hint" style={{ marginBottom: 8 }}>
+                  输入希望 ASR 引擎识别更准确的词汇（如人名、术语），用逗号或换行分隔。
+                </p>
+                <textarea
+                  value={asrHotwords}
+                  onChange={(e) => { setAsrHotwords(e.target.value); setAsrSettingsSaved(false); }}
+                  placeholder="例如：备忘录, Memos, Electron, 开发者..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 13, fontWeight: 500, marginBottom: 4, display: 'block' }}>
+                  纠错映射表 (Correction Map)
+                </label>
+                <p className="hint" style={{ marginBottom: 8 }}>
+                  基于规则的硬替换，格式为 JSON 对象：<code>{`{"错误词": "正确词"}`}</code>
+                </p>
+                <textarea
+                  value={asrCorrectionMap}
+                  onChange={(e) => { setAsrCorrectionMap(e.target.value); setAsrSettingsSaved(false); }}
+                  placeholder='例如：{"背网路": "备忘录", "美墨斯": "Memos"}'
+                  rows={3}
+                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}
+                />
+              </div>
+
+              <div className="ai-prompt-actions">
+                <button className="btn-submit" onClick={handleSaveAsrSettings}>
+                  {asrSettingsSaved ? '✓ 已保存' : '保存配置'}
+                </button>
               </div>
             </div>
           )}

@@ -178,27 +178,32 @@ async function runConversation(provider: AiProvider, model: AiModel, initialMess
 export interface CallLLMOptions {
   modelId?: string;
   onDelta?: OnDelta;
+  disableThinking?: boolean;
 }
 
 export async function callLLM(messages: any[], online: boolean, options: CallLLMOptions, mainWindow: BrowserWindow | null): Promise<any> {
-  const { onDelta, modelId } = options;
+  const { onDelta, modelId, disableThinking } = options;
 
   if (modelId) {
     const m = getModelById(modelId);
     if (!m) throw new Error('指定的模型不存在');
     if (!m.enabled) throw new Error('指定的模型已禁用');
-    const p = getProviderById(m.providerId);
+    
+    // 如果指定了关闭思考模式，拷贝一份覆盖
+    const finalModel = disableThinking ? { ...m, thinking: false } : m;
+
+    const p = getProviderById(finalModel.providerId);
     if (!p) throw new Error('该模型对应的 Provider 已被删除');
     if (!online && !isLocalUrl(p.baseUrl)) throw new Error('当前离线，且该模型不是本地 Provider');
     try {
-      if (onDelta) onDelta({ type: 'model_start', providerName: p.name, modelLabel: modelLabel(p, m) });
-      const r = await runConversation(p, m, messages, onDelta, mainWindow);
-      updateModelRuntime(m.id, { lastError: null, lastUsedAt: new Date().toISOString() });
-      return { ...r, providerName: p.name, modelName: m.name, modelLabel: modelLabel(p, m) };
+      if (onDelta) onDelta({ type: 'model_start', providerName: p.name, modelLabel: modelLabel(p, finalModel) });
+      const r = await runConversation(p, finalModel, messages, onDelta, mainWindow);
+      updateModelRuntime(finalModel.id, { lastError: null, lastUsedAt: new Date().toISOString() });
+      return { ...r, providerName: p.name, modelName: finalModel.name, modelLabel: modelLabel(p, finalModel) };
     } catch (err: any) {
       const msg = (err && err.message) || String(err);
-      updateModelRuntime(m.id, { lastError: msg });
-      throw new Error(`${modelLabel(p, m)} 失败：${msg}`);
+      updateModelRuntime(finalModel.id, { lastError: msg });
+      throw new Error(`${modelLabel(p, finalModel)} 失败：${msg}`);
     }
   }
 
@@ -207,7 +212,7 @@ export async function callLLM(messages: any[], online: boolean, options: CallLLM
   if (allModels.length === 0) throw new Error('未配置任何启用的模型');
 
   const candidates = allModels
-    .map((m) => ({ m, p: getProviderById(m.providerId) }))
+    .map((m) => ({ m: disableThinking ? { ...m, thinking: false } : m, p: getProviderById(m.providerId) }))
     .filter((x): x is { m: AiModel; p: AiProvider } => !!x.p && (online || isLocalUrl(x.p!.baseUrl)));
 
   if (candidates.length === 0) throw new Error('当前离线，未找到可用的本地模型');
