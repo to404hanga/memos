@@ -2,7 +2,7 @@
  * 宠物相关 IPC 通信
  * 处理宠物窗口的拖拽、鼠标穿透、宠物列表/切换、显示/隐藏等操作
  */
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, screen } from 'electron';
 import { PetStateMachine } from './state';
 import { getAllPets, getPetGifPath } from './pets';
 import { getSetting, setSetting } from '../database/settings.repo';
@@ -23,7 +23,7 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
     }
   });
 
-  // 结束拖拽：恢复鼠标穿透 + 保存位置
+  // 结束拖拽：恢复鼠标穿透 + 保存位置 + 记录所在屏幕
   ipcMain.on('pet:end-drag', () => {
     if (petWindow && !petWindow.isDestroyed()) {
       petWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -32,6 +32,9 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
       // 持久化位置
       setSetting('pet_position_x', String(x));
       setSetting('pet_position_y', String(y));
+      // 记录所在屏幕
+      const display = screen.getDisplayNearestPoint({ x, y });
+      setSetting('pet_display_id', String(display.id));
     }
   });
 

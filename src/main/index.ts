@@ -185,5 +185,17 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   (app as any).isQuitting = true;
+  // 保存桌宠当前位置
+  const { getPetWindow } = require('./pet');
+  const petWin = getPetWindow();
+  if (petWin && !petWin.isDestroyed()) {
+    const [x, y] = petWin.getPosition();
+    const { setSetting } = require('./database/settings.repo');
+    const { screen } = require('electron');
+    setSetting('pet_position_x', String(x));
+    setSetting('pet_position_y', String(y));
+    const display = screen.getDisplayNearestPoint({ x, y });
+    setSetting('pet_display_id', String(display.id));
+  }
   closeDatabase();
 });
