@@ -35,12 +35,37 @@ export const AIChatDialog: React.FC<Props> = ({ onClose }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, chat.sending]);
 
-  // Agent 状态联动
+  // Agent 状态联动：根据 sending 和最新消息判断宠物状态
   useEffect(() => {
     if (chat.sending) {
       (window as any).petApi.setAgentState('ai_working');
+      return;
     }
-  }, [chat.sending]);
+
+    // sending 刚结束，检查最新的 assistant 消息判断结果
+    const msgs = chat.messages;
+    if (msgs.length === 0) return;
+
+    const lastAssistant = [...msgs].reverse().find(m => m.role === 'assistant');
+    if (!lastAssistant || lastAssistant.streaming) return;
+
+    // 检查是否有待确认的 toolCalls（如 create_memo 且状态为 pending）
+    const pendingTools = (lastAssistant.toolCalls || []).filter(tc => {
+      const status = lastAssistant.toolStatus?.[tc.id];
+      return !status || status === 'pending';
+    });
+
+    if (pendingTools.length > 0) {
+      // 有待确认的工具调用 → review
+      (window as any).petApi.setAgentState('review');
+    } else if (lastAssistant.content?.startsWith('错误:') || lastAssistant.content?.startsWith('Error:')) {
+      // 失败
+      (window as any).petApi.setAgentState('failed');
+    } else if (lastAssistant.content) {
+      // 正常完成
+      (window as any).petApi.setAgentState('all_done');
+    }
+  }, [chat.sending, chat.messages]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
