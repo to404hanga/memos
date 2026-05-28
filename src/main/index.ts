@@ -19,6 +19,7 @@ import { cleanupOldTrash, cleanupOldConversations } from './database/memo.repo';
 import { registerAllIpc } from './ipc';
 import { loadAllReminders } from './scheduler';
 import { startCliServer } from './api-server';
+import { initPetModule } from './pet';
 
 // 必须在 ready 之前设置
 app.name = 'MemoReminder';
@@ -91,6 +92,23 @@ function createTray(): void {
   const contextMenu = Menu.buildFromTemplate([
     { label: '打开备忘录', click: () => mainWindow && mainWindow.show() },
     { type: 'separator' },
+    { label: '显示桌宠', type: 'checkbox', checked: true, click: (menuItem) => {
+      const { getPetWindow, getPetStateMachine } = require('./pet');
+      const petWin = getPetWindow();
+      const sm = getPetStateMachine();
+      if (petWin && sm) {
+        if (menuItem.checked) {
+          petWin.show();
+          sm.setVisible(true);
+        } else {
+          petWin.hide();
+          sm.setVisible(false);
+        }
+        const { setSetting } = require('./database/settings.repo');
+        setSetting('pet_visible', menuItem.checked ? '1' : '0');
+      }
+    }},
+    { type: 'separator' },
     { label: '退出', click: () => { (app as any).isQuitting = true; app.quit(); } },
   ]);
   tray.setContextMenu(contextMenu);
@@ -110,14 +128,17 @@ app.whenReady().then(async () => {
     return true;
   });
 
-  // 注册 local-file:// 协议处理本地文件（图片/附件）
-  // 安全措施：仅允许访问 images/ 和 attachments/ 目录
+  // 注册 local-file:// 协议处理本地文件（图片/附件/宠物资源）
+  // 安全措施：仅允许访问白名单目录
   const imagesDir = path.join(userDataPath, 'images');
   const attachmentsDir = path.join(userDataPath, 'attachments');
+  const userPetsDir = path.join(userDataPath, 'pets');
+  const builtinPetsDir = path.join(__dirname, '..', '..', 'assets', 'pets');
   protocol.handle('local-file', (request) => {
     const filePath = decodeURIComponent(request.url.replace('local-file://', ''));
     const resolved = path.resolve(filePath);
-    if (!resolved.startsWith(imagesDir) && !resolved.startsWith(attachmentsDir)) {
+    const allowed = [imagesDir, attachmentsDir, userPetsDir, builtinPetsDir];
+    if (!allowed.some(dir => resolved.startsWith(dir))) {
       return new Response('Forbidden', { status: 403 });
     }
     return net.fetch('file://' + resolved);
@@ -141,6 +162,11 @@ app.whenReady().then(async () => {
   registerAllIpc(mainWindow);
   loadAllReminders(mainWindow);
   startCliServer(mainWindow, cliToken);
+
+  // 延迟 1 秒后创建桌宠窗口（避免影响主窗口启动速度）
+  setTimeout(() => {
+    initPetModule();
+  }, 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

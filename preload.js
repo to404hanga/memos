@@ -109,4 +109,10 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('memos-changed', handler);
     return () => ipcRenderer.removeListener('memos-changed', handler);
   },
+
+  // ==================== 桌宠控制 ====================
+  petSetVisible: (visible) => ipcRenderer.invoke('pet:set-visible', visible),
+  petGetState: () => ipcRenderer.invoke('pet:get-state'),
+  petGetPets: () => ipcRenderer.invoke('pet:get-pets'),
+  petSetCurrentPet: (petId) => ipcRenderer.invoke('pet:set-current-pet', petId),
 });

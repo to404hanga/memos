@@ -11,9 +11,10 @@
     "build:main": "npx webpack --config webpack.main.config.js",
     "build:main:dev": "npx cross-env NODE_ENV=development webpack --config webpack.main.config.js",
     "build:renderer": "npx webpack build --mode production",
-    "build": "npm run build:renderer && npm run build:main",
+    "build:pet": "npx webpack build --config webpack.pet.config.js --mode production",
+    "build": "npm run build:renderer && npm run build:pet && npm run build:main",
     "start": "npm run build:main && electron .",
-    "dev": "concurrently \"npx webpack serve --mode development\" \"wait-on http://localhost:3000 && npm run build:main:dev && npx cross-env DEV_SERVER=1 electron .\"",
+    "dev": "concurrently \"npx webpack serve --mode development\" \"npx webpack serve --config webpack.pet.config.js --mode development\" \"wait-on http://localhost:3000 && wait-on http://localhost:3001 && npm run build:main:dev && npx cross-env DEV_SERVER=1 electron .\"",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder --publish never",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
@@ -39,6 +40,7 @@
     "@types/uuid": "^10.0.0",
     "babel-loader": "^9.1.3",
     "concurrently": "^8.2.2",
+    "copy-webpack-plugin": "^14.0.0",
     "cross-env": "^10.1.0",
     "css-loader": "^6.10.0",
     "electron": "^28.2.0",
@@ -66,6 +68,7 @@
     "files": [
       "dist/**/*",
       "preload.js",
+      "preload-pet.js",
       "assets/**/*",
       "node_modules/sql.js/dist/sql-wasm.wasm",
       "node_modules/sherpa-onnx-node/**/*"
