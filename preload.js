@@ -115,4 +115,9 @@ contextBridge.exposeInMainWorld('api', {
   petGetState: () => ipcRenderer.invoke('pet:get-state'),
   petGetPets: () => ipcRenderer.invoke('pet:get-pets'),
   petSetCurrentPet: (petId) => ipcRenderer.invoke('pet:set-current-pet', petId),
+  petGetActions: () => ipcRenderer.invoke('pet:get-actions'),
+  petSelectGif: () => ipcRenderer.invoke('pet:select-gif'),
+  petImport: (petName, actionMap) => ipcRenderer.invoke('pet:import', petName, actionMap),
+  petDelete: (petId) => ipcRenderer.invoke('pet:delete', petId),
+  petGetPetActions: (petId) => ipcRenderer.invoke('pet:get-pet-actions', petId),
 });

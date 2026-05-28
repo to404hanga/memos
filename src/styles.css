@@ -4497,5 +4497,261 @@ input, textarea, button {
   color: #ff3b30;
 }
 
+/* ===== 桌宠管理面板 ===== */
 
+.pet-manager-modal {
+  width: 480px;
+  max-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pet-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+}
+
+.pet-manager-header h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.pet-manager-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.pet-manager-close:hover {
+  background: var(--bg-hover);
+}
+
+.pet-manager-error {
+  margin: 0 20px 8px;
+  padding: 8px 12px;
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff3b30;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.pet-manager-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 20px;
+}
+
+.pet-manager-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 4px;
+}
+
+.pet-manager-item:hover {
+  background: var(--bg-hover);
+}
+
+.pet-manager-item.active {
+  background: var(--bg-active, rgba(74, 158, 255, 0.1));
+}
+
+.pet-manager-item-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pet-manager-item-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.pet-manager-item-source {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.pet-manager-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pet-manager-badge {
+  font-size: 11px;
+  color: #4a9eff;
+  background: rgba(74, 158, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.pet-manager-delete-btn {
+  font-size: 12px;
+  color: #ff3b30;
+  background: none;
+  border: 1px solid rgba(255, 59, 48, 0.3);
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pet-manager-delete-btn:hover {
+  background: rgba(255, 59, 48, 0.1);
+}
+
+.pet-manager-empty {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 30px 0;
+  font-size: 14px;
+}
+
+.pet-manager-import-btn {
+  margin: 12px 20px 16px;
+  padding: 10px;
+  background: var(--bg-hover);
+  border: 1px dashed var(--border-color, #ddd);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.pet-manager-import-btn:hover {
+  background: rgba(74, 158, 255, 0.08);
+  border-color: #4a9eff;
+  color: #4a9eff;
+}
+
+/* 导入面板 */
+.pet-import-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 20px;
+}
+
+.pet-import-field {
+  margin-bottom: 12px;
+}
+
+.pet-import-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.pet-import-field input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--bg-input, #fff);
+  color: inherit;
+}
+
+.pet-import-actions-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.pet-import-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pet-import-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pet-import-action-label {
+  width: 100px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.pet-import-required {
+  color: #ff3b30;
+  margin-left: 2px;
+}
+
+.pet-import-select-btn {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+
+.pet-import-select-btn:hover {
+  border-color: #4a9eff;
+}
+
+.pet-import-clear-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+}
+
+.pet-import-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border-color, #eee);
+}
+
+.pet-import-cancel,
+.pet-import-confirm {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+}
+
+.pet-import-cancel {
+  background: var(--bg-hover);
+  color: inherit;
+}
+
+.pet-import-confirm {
+  background: #4a9eff;
+  color: #fff;
+}
+
+.pet-import-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
