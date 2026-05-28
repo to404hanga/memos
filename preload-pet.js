@@ -1,10 +1,46 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('petApi', {
-  // 获取当前状态（含 currentPet）
-  getState: () => ipcRenderer.invoke('pet:get-state'),
+// ==================== window.api（与主窗口一致，供复用 useAiChat 等 hook） ====================
+contextBridge.exposeInMainWorld('api', {
+  // AI Chat（useAiChat 依赖）
+  aiGetConversations: () => ipcRenderer.invoke('ai-get-conversations'),
+  aiSaveConversation: (conv) => ipcRenderer.invoke('ai-save-conversation', conv),
+  aiGetConversation: (id) => ipcRenderer.invoke('ai-get-conversation', id),
+  aiDeleteConversation: (id) => ipcRenderer.invoke('ai-delete-conversation', id),
+  aiClearConversations: () => ipcRenderer.invoke('ai-clear-conversations'),
+  aiHasUsableModel: () => ipcRenderer.invoke('ai-has-usable-model'),
+  aiGetProviders: () => ipcRenderer.invoke('ai-get-providers'),
+  aiGetModels: () => ipcRenderer.invoke('ai-get-models'),
+  aiChatStream: (args, onChunk) => {
+    const streamId = args.streamId || Date.now().toString();
+    const handler = (_, chunk) => {
+      if (chunk.streamId !== streamId) return;
+      onChunk(chunk);
+      if (chunk.type === 'done' || chunk.type === 'error') {
+        ipcRenderer.removeListener('ai-chat-chunk', handler);
+      }
+    };
+    ipcRenderer.on('ai-chat-chunk', handler);
+    ipcRenderer.send('ai-chat-stream', { ...args, streamId });
+    return streamId;
+  },
+  aiChatStreamOff: (streamId) => {
+    ipcRenderer.removeAllListeners('ai-chat-chunk');
+  },
+  // 备忘录操作（创建备忘录预览卡片确认时需要）
+  addMemo: (memo) => ipcRenderer.invoke('add-memo', memo),
+  getTags: () => ipcRenderer.invoke('get-tags'),
+  onMemosChanged: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('memos-changed', handler);
+    return () => ipcRenderer.removeListener('memos-changed', handler);
+  },
+});
 
-  // 监听状态更新
+// ==================== window.petApi（桌宠专用） ====================
+contextBridge.exposeInMainWorld('petApi', {
+  // 状态
+  getState: () => ipcRenderer.invoke('pet:get-state'),
   onStateUpdate: (callback) => {
     const handler = (_, state) => callback(state);
     ipcRenderer.on('pet:state-update', handler);
@@ -26,4 +62,11 @@ contextBridge.exposeInMainWorld('petApi', {
 
   // 显示/隐藏
   setVisible: (visible) => ipcRenderer.invoke('pet:set-visible', visible),
+
+  // 对话框开关
+  openChatDialog: () => ipcRenderer.send('pet:open-chat-dialog'),
+  closeChatDialog: () => ipcRenderer.send('pet:close-chat-dialog'),
+
+  // Agent 状态
+  setAgentState: (state) => ipcRenderer.send('pet:set-agent-state', state),
 });
