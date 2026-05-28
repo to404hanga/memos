@@ -76,9 +76,10 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
   ipcMain.on('pet:close-chat-dialog', () => {
     if (petWindow && !petWindow.isDestroyed()) {
       const [x, y] = petWindow.getPosition();
-      // 收缩回原始大小
-      const dy = PET_WINDOW_CHAT.height - PET_WINDOW_NORMAL.height;
-      const dx = (PET_WINDOW_CHAT.width - PET_WINDOW_NORMAL.width) / 2;
+      const [curW, curH] = petWindow.getSize();
+      // 用当前实际尺寸计算偏移，收缩回原始大小
+      const dy = curH - PET_WINDOW_NORMAL.height;
+      const dx = (curW - PET_WINDOW_NORMAL.width) / 2;
       petWindow.setBounds({
         x: Math.round(x + dx),
         y: y + dy,
