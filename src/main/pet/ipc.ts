@@ -7,6 +7,8 @@ import { ipcMain, BrowserWindow, screen, dialog } from 'electron';
 import { PetStateMachine, PetState } from './state';
 import { getAllPets, getPetGifPath, PET_ACTIONS, importPetPack, deleteUserPet, getPetActions } from './pets';
 import { setSetting } from '../database/settings.repo';
+import { getMemoById, updateReminderTime } from '../database/memo.repo';
+import { reschedule } from '../scheduler';
 
 const PET_WINDOW_NORMAL = { width: 200, height: 200 };
 const PET_WINDOW_CHAT = { width: 420, height: 600 };
@@ -53,17 +55,17 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
 
   // ==================== 对话框开关（调整窗口大小） ====================
 
-  ipcMain.on('pet:open-chat-dialog', () => {
+  ipcMain.on('pet:open-chat-dialog', (_e, size?: { width: number; height: number }) => {
     if (petWindow && !petWindow.isDestroyed()) {
+      const target = size || PET_WINDOW_CHAT;
       const [x, y] = petWindow.getPosition();
-      // 向上扩展窗口高度，保持底部宠物位置不变
-      const dy = PET_WINDOW_CHAT.height - PET_WINDOW_NORMAL.height;
-      const dx = (PET_WINDOW_CHAT.width - PET_WINDOW_NORMAL.width) / 2;
+      const dy = target.height - PET_WINDOW_NORMAL.height;
+      const dx = (target.width - PET_WINDOW_NORMAL.width) / 2;
       petWindow.setBounds({
         x: Math.round(x - dx),
         y: y - dy,
-        width: PET_WINDOW_CHAT.width,
-        height: PET_WINDOW_CHAT.height,
+        width: target.width,
+        height: target.height,
       });
       petWindow.setIgnoreMouseEvents(false);
       petWindow.setFocusable(true);
@@ -102,6 +104,21 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('memos-changed');
     }
+  });
+
+  // 延后提醒：将提醒时间推迟 N 分钟
+  ipcMain.handle('pet:snooze-memo', (_e, memoId: string, minutes: number) => {
+    const memo = getMemoById(memoId);
+    if (!memo) return { success: false };
+
+    const snoozeTime = new Date(Date.now() + minutes * 60 * 1000).toISOString();
+    updateReminderTime(memoId, snoozeTime);
+    reschedule();
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('memos-changed');
+    }
+    return { success: true };
   });
 
   // ==================== 基础状态查询 ====================

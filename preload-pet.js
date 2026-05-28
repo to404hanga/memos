@@ -64,7 +64,7 @@ contextBridge.exposeInMainWorld('petApi', {
   setVisible: (visible) => ipcRenderer.invoke('pet:set-visible', visible),
 
   // 对话框开关
-  openChatDialog: () => ipcRenderer.send('pet:open-chat-dialog'),
+  openChatDialog: (size) => ipcRenderer.send('pet:open-chat-dialog', size),
   closeChatDialog: () => ipcRenderer.send('pet:close-chat-dialog'),
 
   // Agent 状态
@@ -72,4 +72,20 @@ contextBridge.exposeInMainWorld('petApi', {
 
   // 通知主窗口刷新备忘录
   notifyMemosChanged: () => ipcRenderer.send('pet:notify-memos-changed'),
+
+  // 提醒事件
+  onReminder: (callback) => {
+    const handler = (_, data) => callback(data);
+    ipcRenderer.on('pet:reminder', handler);
+    return () => ipcRenderer.removeListener('pet:reminder', handler);
+  },
+
+  // 确认提醒（回到 idle）
+  dismissReminder: () => ipcRenderer.send('pet:set-agent-state', 'idle'),
+
+  // 完成备忘录
+  completeMemo: (id) => ipcRenderer.invoke('toggle-complete', id),
+
+  // 延后提醒（分钟）
+  snoozeMemo: (id, minutes) => ipcRenderer.invoke('pet:snooze-memo', id, minutes),
 });

@@ -207,31 +207,25 @@ function fireReminder(memo: Memo, rem: any): void {
     notification.show();
   }
 
-  if (mainWindowRef && !mainWindowRef.isDestroyed()) {
-    mainWindowRef.show();
-    mainWindowRef.focus();
-    mainWindowRef.webContents.send('reminder-triggered', {
-      id: memo.id,
-      title: memo.title,
-      content: memo.content,
-    });
-  }
-
-  // 桌宠提醒：切换为 jumping 动画 + 气泡显示待办标题
+  // 桌宠提醒：切换为 jumping 动画 + 发送提醒数据给宠物窗口
   try {
     const { getPetStateMachine, getPetWindow } = require('../pet');
     const sm = getPetStateMachine();
     const petWin = getPetWindow();
     if (sm && petWin && !petWin.isDestroyed()) {
       sm.transition('reminder', `⏰ ${memo.title}`);
-      // 8 秒后自动回到 idle
-      setTimeout(() => {
-        if (sm.getState().currentState === 'reminder') {
-          sm.transition('idle');
-        }
-      }, 8000);
+      petWin.webContents.send('pet:reminder', {
+        id: memo.id,
+        title: memo.title,
+        content: memo.content || '',
+      });
     }
   } catch {}
+
+  // 通知主窗口刷新备忘录列表（但不弹窗）
+  if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+    mainWindowRef.webContents.send('memos-changed');
+  }
 
   sendWebhook(memo, rem.type).catch(() => {});
 }

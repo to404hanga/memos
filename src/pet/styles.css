@@ -198,3 +198,124 @@ html, body, #pet-root {
 .chat-abort-btn:hover {
   background: #c0392b;
 }
+
+/* ==================== 提醒弹窗 ==================== */
+
+.pet-reminder-popup {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(30, 30, 30, 0.95);
+  border-radius: 14px;
+  margin: 0 6px 6px 6px;
+  padding: 16px 12px;
+  pointer-events: auto;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  animation: reminderBounce 0.4s ease;
+  text-align: center;
+}
+
+@keyframes reminderBounce {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.pet-reminder-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+  animation: shake 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes shake {
+  0% { transform: rotate(-10deg); }
+  100% { transform: rotate(10deg); }
+}
+
+.pet-reminder-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ff3b30;
+  margin-bottom: 8px;
+}
+
+.pet-reminder-list {
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+  text-align: left;
+  margin-bottom: 12px;
+}
+
+.pet-reminder-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.pet-reminder-bullet {
+  color: #0a84ff;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.pet-reminder-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pet-reminder-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #f5f5f7;
+}
+
+.pet-reminder-content {
+  font-size: 11px;
+  color: #a1a1a6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pet-reminder-buttons {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.pet-reminder-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pet-reminder-snooze {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.pet-reminder-snooze:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.pet-reminder-done {
+  background: #0a84ff;
+}
+
+.pet-reminder-done:hover {
+  background: #0070e0;
+}
