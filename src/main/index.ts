@@ -165,7 +165,7 @@ app.whenReady().then(async () => {
 
   // 延迟 1 秒后创建桌宠窗口（避免影响主窗口启动速度）
   setTimeout(() => {
-    initPetModule();
+    initPetModule(mainWindow);
   }, 1000);
 
   app.on('activate', () => {

@@ -33,17 +33,11 @@ function getUserPetsDir(): string {
 }
 
 /**
- * 在目录中查找匹配 *{keyword}*.gif 的第一个文件
- * 例如 findGif(dir, 'idle') 可匹配 idle.gif / becky-idle.gif / my-idle-anim.gif
+ * 在目录中查找精确匹配 {action}.gif 的文件
  */
-function findGif(dir: string, keyword: string): string | null {
-  try {
-    const files = fs.readdirSync(dir);
-    const match = files.find(f => f.includes(keyword) && f.endsWith('.gif'));
-    return match ? path.join(dir, match) : null;
-  } catch {
-    return null;
-  }
+function findGif(dir: string, action: string): string | null {
+  const filePath = path.join(dir, `${action}.gif`);
+  return fs.existsSync(filePath) ? filePath : null;
 }
 
 function scanPetsInDir(dir: string, source: 'builtin' | 'user'): PetMeta[] {
@@ -57,8 +51,8 @@ function scanPetsInDir(dir: string, source: 'builtin' | 'user'): PetMeta[] {
     const petDir = path.join(dir, entry.name);
     const metaPath = path.join(petDir, 'meta.json');
 
-    // 至少需要 *idle*.gif 才算有效宠物包
-    if (!findGif(petDir, 'idle')) continue;
+    // 至少需要 idle.gif 才算有效宠物包
+    if (!fs.existsSync(path.join(petDir, 'idle.gif'))) continue;
 
     let meta: Partial<PetMeta> = {};
     if (fs.existsSync(metaPath)) {
@@ -107,9 +101,7 @@ export function getPetById(petId: string): PetMeta | undefined {
 
 /**
  * 获取宠物某个状态的 GIF 文件路径
- * 
- * 直接使用 *{keyword}*.gif 通配匹配，兼容任何命名格式：
- * - idle.gif / becky-idle.gif / my-idle-anim.gif 都能匹配
+ * 精确匹配 {action}.gif
  */
 export function getPetGifPath(petId: string, state: string): string | null {
   const pet = getPetById(petId);
@@ -128,8 +120,8 @@ export function getPetGifPath(petId: string, state: string): string | null {
     running_right: 'running-right',
   };
 
-  const keyword = STATE_KEYWORD_MAP[state] || 'idle';
-  return findGif(pet.dir, keyword);
+  const action = STATE_KEYWORD_MAP[state] || 'idle';
+  return findGif(pet.dir, action);
 }
 
 /**
@@ -138,4 +130,77 @@ export function getPetGifPath(petId: string, state: string): string | null {
 export function getDefaultPetId(): string {
   const pets = getAllPets();
   return pets.length > 0 ? pets[0].id : '';
+}
+
+/**
+ * 所有可用的标准动作名
+ */
+export const PET_ACTIONS = [
+  { action: 'idle', label: '待机', required: true },
+  { action: 'running', label: 'AI 工作中' },
+  { action: 'running-left', label: '向左跑' },
+  { action: 'running-right', label: '向右跑' },
+  { action: 'waving', label: '完成/庆祝' },
+  { action: 'failed', label: '失败/焦急' },
+  { action: 'jumping', label: '跳跃/提醒' },
+  { action: 'waiting', label: '等待/睡眠' },
+  { action: 'review', label: '审视/确认' },
+];
+
+/**
+ * 导入宠物包
+ * @param petName 宠物名称（将作为目录名和 ID）
+ * @param actionMap 动作 → 源 GIF 文件绝对路径 的映射
+ */
+export function importPetPack(petName: string, actionMap: Record<string, string>): { success: boolean; error?: string } {
+  if (!actionMap['idle']) {
+    return { success: false, error: '必须提供 idle 动作的 GIF' };
+  }
+
+  const userDir = getUserPetsDir();
+  const petId = petName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+  const petDir = path.join(userDir, petId);
+
+  // 创建目录
+  if (!fs.existsSync(petDir)) {
+    fs.mkdirSync(petDir, { recursive: true });
+  }
+
+  // 复制并重命名 GIF
+  for (const [action, srcPath] of Object.entries(actionMap)) {
+    if (!srcPath || !fs.existsSync(srcPath)) continue;
+    const destPath = path.join(petDir, `${action}.gif`);
+    fs.copyFileSync(srcPath, destPath);
+  }
+
+  // 写入 meta.json
+  const meta = { id: petId, name: petName, description: '', author: 'user' };
+  fs.writeFileSync(path.join(petDir, 'meta.json'), JSON.stringify(meta, null, 2));
+
+  return { success: true };
+}
+
+/**
+ * 删除用户导入的宠物包
+ */
+export function deleteUserPet(petId: string): { success: boolean; error?: string } {
+  const pet = getPetById(petId);
+  if (!pet) return { success: false, error: '宠物不存在' };
+  if (pet.source !== 'user') return { success: false, error: '不能删除内置宠物' };
+
+  fs.rmSync(pet.dir, { recursive: true, force: true });
+  return { success: true };
+}
+
+/**
+ * 获取宠物包已有的动作 GIF 列表
+ */
+export function getPetActions(petId: string): { action: string; exists: boolean }[] {
+  const pet = getPetById(petId);
+  if (!pet) return [];
+
+  return PET_ACTIONS.map(({ action }) => ({
+    action,
+    exists: fs.existsSync(path.join(pet.dir, `${action}.gif`)),
+  }));
 }

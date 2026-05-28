@@ -17,7 +17,7 @@ let roaming: PetRoaming | null = null;
 
 const PET_SIZE = { width: 200, height: 200 };
 
-export function initPetModule(): void {
+export function initPetModule(mainWindow: BrowserWindow | null): void {
   // 从数据库恢复设置
   const savedPet = getSetting('pet_current') || getDefaultPetId();
   const savedVisible = getSetting('pet_visible') !== '0'; // 默认可见
@@ -62,7 +62,7 @@ export function initPetModule(): void {
     petWindow.hide();
   }
 
-  registerPetIpc(petWindow, stateMachine);
+  registerPetIpc(petWindow, stateMachine, mainWindow);
 
   // 状态变化时推送给宠物渲染进程
   stateMachine.onStateChange((state) => {

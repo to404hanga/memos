@@ -1,13 +1,17 @@
 /**
  * 宠物相关 IPC 通信
- * 处理宠物窗口的拖拽、鼠标穿透、宠物列表/切换、显示/隐藏等操作
+ * 处理宠物窗口的拖拽、鼠标穿透、宠物列表/切换、显示/隐藏、
+ * AI 对话框开关、Agent 状态联动等操作
  */
-import { ipcMain, BrowserWindow, screen } from 'electron';
-import { PetStateMachine } from './state';
-import { getAllPets, getPetGifPath } from './pets';
-import { getSetting, setSetting } from '../database/settings.repo';
+import { ipcMain, BrowserWindow, screen, dialog } from 'electron';
+import { PetStateMachine, PetState } from './state';
+import { getAllPets, getPetGifPath, PET_ACTIONS, importPetPack, deleteUserPet, getPetActions } from './pets';
+import { setSetting } from '../database/settings.repo';
 
-export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateMachine): void {
+const PET_WINDOW_NORMAL = { width: 200, height: 200 };
+const PET_WINDOW_CHAT = { width: 420, height: 600 };
+
+export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateMachine, mainWindow: BrowserWindow | null): void {
   // 开始拖拽：取消鼠标穿透
   ipcMain.on('pet:start-drag', () => {
     if (petWindow && !petWindow.isDestroyed()) {
@@ -29,10 +33,8 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
       petWindow.setIgnoreMouseEvents(true, { forward: true });
       const [x, y] = petWindow.getPosition();
       stateMachine.setPosition(x, y);
-      // 持久化位置
       setSetting('pet_position_x', String(x));
       setSetting('pet_position_y', String(y));
-      // 记录所在屏幕
       const display = screen.getDisplayNearestPoint({ x, y });
       setSetting('pet_display_id', String(display.id));
     }
@@ -49,12 +51,58 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
     }
   });
 
-  // 获取宠物当前状态
+  // ==================== 对话框开关（调整窗口大小） ====================
+
+  ipcMain.on('pet:open-chat-dialog', () => {
+    if (petWindow && !petWindow.isDestroyed()) {
+      const [x, y] = petWindow.getPosition();
+      // 向上扩展窗口高度，保持底部宠物位置不变
+      const dy = PET_WINDOW_CHAT.height - PET_WINDOW_NORMAL.height;
+      const dx = (PET_WINDOW_CHAT.width - PET_WINDOW_NORMAL.width) / 2;
+      petWindow.setBounds({
+        x: Math.round(x - dx),
+        y: y - dy,
+        width: PET_WINDOW_CHAT.width,
+        height: PET_WINDOW_CHAT.height,
+      });
+      petWindow.setIgnoreMouseEvents(false);
+      petWindow.setFocusable(true);
+      petWindow.focus();
+    }
+  });
+
+  ipcMain.on('pet:close-chat-dialog', () => {
+    if (petWindow && !petWindow.isDestroyed()) {
+      const [x, y] = petWindow.getPosition();
+      // 收缩回原始大小
+      const dy = PET_WINDOW_CHAT.height - PET_WINDOW_NORMAL.height;
+      const dx = (PET_WINDOW_CHAT.width - PET_WINDOW_NORMAL.width) / 2;
+      petWindow.setBounds({
+        x: Math.round(x + dx),
+        y: y + dy,
+        width: PET_WINDOW_NORMAL.width,
+        height: PET_WINDOW_NORMAL.height,
+      });
+      petWindow.setFocusable(false);
+      petWindow.setIgnoreMouseEvents(true, { forward: true });
+    }
+  });
+
+  // ==================== Agent 状态联动 ====================
+
+  ipcMain.on('pet:set-agent-state', (_e, state: string) => {
+    const validStates: PetState[] = ['idle', 'ai_working', 'all_done', 'failed', 'review'];
+    if (validStates.includes(state as PetState)) {
+      stateMachine.transition(state as PetState);
+    }
+  });
+
+  // ==================== 基础状态查询 ====================
+
   ipcMain.handle('pet:get-state', () => {
     return stateMachine.getState();
   });
 
-  // 获取所有可用宠物列表
   ipcMain.handle('pet:get-pets', () => {
     return getAllPets().map(p => ({
       id: p.id,
@@ -65,19 +113,16 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
     }));
   });
 
-  // 切换当前宠物
   ipcMain.handle('pet:set-current-pet', (_e, petId: string) => {
     stateMachine.setCurrentPet(petId);
     setSetting('pet_current', petId);
     return { success: true };
   });
 
-  // 获取宠物指定状态的 GIF 路径
   ipcMain.handle('pet:get-gif-path', (_e, petId: string, state: string) => {
     return getPetGifPath(petId, state);
   });
 
-  // 显示/隐藏宠物
   ipcMain.handle('pet:set-visible', (_e, visible: boolean) => {
     stateMachine.setVisible(visible);
     setSetting('pet_visible', visible ? '1' : '0');
@@ -88,5 +133,38 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
         petWindow.hide();
       }
     }
+  });
+
+  // ==================== 宠物导入管理 ====================
+
+  // 获取标准动作列表
+  ipcMain.handle('pet:get-actions', () => {
+    return PET_ACTIONS;
+  });
+
+  // 选择 GIF 文件（打开文件对话框）
+  ipcMain.handle('pet:select-gif', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择 GIF 文件',
+      filters: [{ name: 'GIF 图片', extensions: ['gif'] }],
+      properties: ['openFile'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
+  });
+
+  // 导入宠物包
+  ipcMain.handle('pet:import', (_e, petName: string, actionMap: Record<string, string>) => {
+    return importPetPack(petName, actionMap);
+  });
+
+  // 删除用户宠物
+  ipcMain.handle('pet:delete', (_e, petId: string) => {
+    return deleteUserPet(petId);
+  });
+
+  // 获取宠物的动作 GIF 状态
+  ipcMain.handle('pet:get-pet-actions', (_e, petId: string) => {
+    return getPetActions(petId);
   });
 }
