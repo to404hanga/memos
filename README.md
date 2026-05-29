@@ -1,6 +1,6 @@
 # 备忘录提醒 (Memo Reminder)
 
-一个简洁美观的桌面备忘录应用，支持 Markdown 编辑、图片插入、周期提醒、多视图切换、AI 助手和语音输入。
+一个简洁美观的桌面备忘录应用，支持 Markdown 编辑、图片插入、周期提醒、多视图切换、AI 助手、语音输入和桌面宠物。
 
 ## 功能
 
@@ -28,7 +28,7 @@
 - 工作日提醒：每个工作日提醒（支持中国法定假日和调休）
 - 每周提醒：指定星期几和时间
 - 每月提醒：指定几号和时间
-- 到时桌面通知 + 应用内弹窗双重提醒
+- 到时桌面通知 + 桌宠弹窗提醒（支持完成/延后5分钟）
 - 周期提醒触发后自动调度下一次
 - 静默期：指定日期范围内暂停提醒（适合出差/休假）
 
@@ -61,6 +61,22 @@
 - 懒加载 + 空闲 5 分钟自动释放，不影响日常使用性能
 - 录音最长 5 分钟自动停止
 - 全程离线运行，无需联网
+
+### 桌面宠物
+
+- 始终浮动在桌面上的动画角色，作为应用状态的可视化代理
+- 支持多宠物包：内置 QQ 企鹅，支持用户导入自定义 GIF 宠物包
+- 动画状态与应用联动：
+  - `idle` 待机 / `running` AI 工作中 / `waving` 任务完成
+  - `failed` 执行失败 / `review` 等待确认 / `jumping` 提醒到期
+  - `running-left` / `running-right` 随机漫游
+- 单击宠物弹出 AI 对话框，复用完整 AI 助手功能（流式对话、工具调用、创建备忘录）
+- 到期提醒弹窗：替代传统应用内弹窗，支持"完成"和"5分钟后提醒"
+- 随机漫游：宠物在当前屏幕范围内随机移动，支持多屏
+- 拖拽移动 + 位置记忆（跨重启保持位置，多屏感知）
+- 鼠标穿透：透明区域点击穿透，仅宠物区域响应交互
+- 对话框智能弹出方向：根据宠物在屏幕中的位置自动选择展开方向
+- 桌宠管理面板：查看/切换/导入/删除宠物包，为每个动作指定 GIF
 
 ### 其他
 
@@ -123,8 +139,20 @@ src/
 │   │   ├── ipc.ts          # ASR IPC handlers
 │   │   └── index.ts        # 模块入口
 │   ├── ipc/            # IPC handler
+│   ├── pet/            # 桌宠模块
+│   │   ├── index.ts       # 模块入口（初始化/位置恢复）
+│   │   ├── window.ts      # 透明置顶窗口创建
+│   │   ├── state.ts       # 宠物状态机
+│   │   ├── pets.ts        # 宠物包扫描/导入/管理
+│   │   ├── roaming.ts     # 随机漫游
+│   │   └── ipc.ts         # 桌宠 IPC
 │   ├── api-server/     # CLI HTTP API（端口 19527）
 │   └── webhook/        # 企微 Webhook 推送
+├── pet/                # 桌宠渲染进程
+│   ├── index.tsx       # React 入口（暗色主题）
+│   ├── PetRenderer.tsx # 宠物动画 + 对话框 + 提醒弹窗
+│   ├── AIChatDialog.tsx # AI 对话框（复用 useAiChat）
+│   └── styles.css      # 桌宠窗口样式
 ├── hooks/              # React 自定义 Hooks
 │   ├── useTheme.ts     # 主题管理（系统/浅色/深色）
 │   ├── useMemos.ts     # 备忘录状态管理
@@ -147,6 +175,7 @@ src/
 │   ├── AiModelSelector.tsx # AI 模型选择
 │   ├── AiPreviewCard.tsx   # AI 预览卡片
 │   ├── AiProviderSettings.tsx  # AI Provider 设置
+│   ├── PetManagerPanel.tsx    # 桌宠管理面板
 │   └── WebhookConfigPanel.tsx  # Webhook 配置
 ├── styles/
 │   └── variables.css   # CSS 变量（主题色/间距等）
@@ -154,7 +183,10 @@ src/
 ├── index.tsx           # React 入口
 └── index.html          # HTML 模板
 cli.js                  # CLI 入口（Commander.js）
-preload.js              # Electron preload 脚本
+preload.js              # Electron preload 脚本（主窗口）
+preload-pet.js          # Electron preload 脚本（桌宠窗口）
+webpack.pet.config.js   # 桌宠渲染进程打包配置
+assets/pets/            # 内置桌宠 GIF 资源
 ```
 
 ## CLI 使用
