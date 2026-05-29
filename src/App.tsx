@@ -18,6 +18,7 @@ import Timeline from './components/Timeline';
 import CalendarView from './components/CalendarView';
 import KanbanView from './components/KanbanView';
 import AiChatModal from './components/AiChatModal';
+import { PetManagerPanel } from './components/PetManagerPanel';
 import { useTheme } from './hooks/useTheme';
 import { useMemos } from './hooks/useMemos';
 import type { Memo, MemoFormData, ReminderData } from '../types/global';
@@ -37,6 +38,7 @@ export default function App(): React.ReactElement {
   const aiInputKey = useRef(0);
   const [reminders, setReminders] = useState<ReminderData[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [showPetManager, setShowPetManager] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // 提醒事件（队列模式，支持同时刻多条提醒）
@@ -120,6 +122,11 @@ export default function App(): React.ReactElement {
               <button className={`theme-btn ${themeMode === 'light' ? 'active' : ''}`} onClick={() => setThemeMode('light')} title="浅色">☀️</button>
               <button className={`theme-btn ${themeMode === 'dark' ? 'active' : ''}`} onClick={() => setThemeMode('dark')} title="深色">🌙</button>
             </div>
+            <button
+              className="ai-toggle-btn"
+              onClick={() => setShowPetManager(true)}
+              title="桌宠管理"
+            >🐾</button>
             <button
               className={`ai-toggle-btn ${showAiChat ? 'active' : ''}`}
               onClick={() => setShowAiChat((v) => !v)}
@@ -266,6 +273,10 @@ export default function App(): React.ReactElement {
             setShowForm(true);
           }}
         />
+      )}
+
+      {showPetManager && (
+        <PetManagerPanel onClose={() => setShowPetManager(false)} />
       )}
 
       {reminders.length > 0 && (

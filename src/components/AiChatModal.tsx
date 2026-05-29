@@ -15,7 +15,7 @@ import AiMessageList from './AiMessageList';
 import AiModelSelector from './AiModelSelector';
 import AiHistoryPanel from './AiHistoryPanel';
 import VoiceInputButton from './VoiceInputButton';
-import { PetManagerPanel } from './PetManagerPanel';
+
 import { useAiChat } from '../hooks/useAiChat';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import type { AiCreateMemoArgs, AiToolCall, MemoFormData } from '../../types/global';
@@ -35,7 +35,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
   }, [chat.setInput]));
 
   const [showSettings, setShowSettings] = useState(false);
-  const [showPetManager, setShowPetManager] = useState(false);
+
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -129,7 +129,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
             <button className="ai-icon-btn" onClick={() => { chat.startNewConversation(); setShowHistory(false); }} title="新对话">＋</button>
             <button className="ai-icon-btn" onClick={() => { setShowHistory((v) => !v); chat.loadConversations(); }} title="历史对话">🕓</button>
             <button className="ai-icon-btn" onClick={() => setShowSettings(true)} title="Provider 配置">⚙️</button>
-            <button className="ai-icon-btn" onClick={() => setShowPetManager(true)} title="桌宠管理">🐾</button>
+
             <button className="ai-icon-btn" onClick={onClose} title="收起侧边栏">✕</button>
           </div>
         </div>
@@ -279,9 +279,7 @@ export default function AiSidebar({ onClose, onConfirmCreate, onEditDraft, attac
         }} />
       )}
 
-      {showPetManager && (
-        <PetManagerPanel onClose={() => setShowPetManager(false)} />
-      )}
+
     </>
   );
 }
