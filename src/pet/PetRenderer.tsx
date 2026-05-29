@@ -24,6 +24,8 @@ export const PetRenderer: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [reminders, setReminders] = useState<ReminderData[]>([]);
+  const [petAtBottom, setPetAtBottom] = useState(true);
+  const [petOffsetX, setPetOffsetX] = useState(0);
   const dragOffset = useRef({ x: 0, y: 0 });
   const clickStartTime = useRef(0);
   const clickStartPos = useRef({ x: 0, y: 0 });
@@ -43,8 +45,16 @@ export const PetRenderer: React.FC = () => {
   useEffect(() => {
     const cleanup = (window as any).petApi.onReminder((data: ReminderData) => {
       setReminders(prev => [...prev, data]);
-      // 提醒弹窗需要取消鼠标穿透
       (window as any).petApi.setIgnoreMouseEvents(false);
+    });
+    return cleanup;
+  }, []);
+
+  // 监听布局方向（宠物在底部还是顶部）
+  useEffect(() => {
+    const cleanup = (window as any).petApi.onLayoutDirection((data: { petAtBottom: boolean; petOffsetX: number }) => {
+      setPetAtBottom(data.petAtBottom);
+      setPetOffsetX(data.petOffsetX || 0);
     });
     return cleanup;
   }, []);
@@ -163,12 +173,27 @@ export const PetRenderer: React.FC = () => {
 
   const handleCloseChat = useCallback(() => {
     setShowChat(false);
+    setPetOffsetX(0);
   }, []);
 
   if (!petState.visible) return null;
 
   return (
-    <div className={`pet-container ${isExpanded ? 'pet-container-expanded' : ''}`}>
+    <div className={`pet-container ${isExpanded ? 'pet-container-expanded' : ''} ${isExpanded && !petAtBottom ? 'pet-top' : ''}`}>
+      {/* 宠物在顶部时：先渲染宠物，再渲染对话框 */}
+      {isExpanded && !petAtBottom && (
+        <img
+          className="pet-animation"
+          src={gifSrc}
+          alt={petState.currentState}
+          draggable={false}
+          style={{ marginLeft: `${petOffsetX * 2}px` }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onMouseDown={handleMouseDown}
+        />
+      )}
+
       {/* AI 对话框 */}
       {showChat && reminders.length === 0 && <AIChatDialog onClose={handleCloseChat} />}
 
@@ -195,23 +220,26 @@ export const PetRenderer: React.FC = () => {
         </div>
       )}
 
-      {/* 气泡通知（仅在无弹窗时显示） */}
+      {/* 气泡通知 */}
       {!isExpanded && petState.bubbleMessage && (
         <div className="pet-bubble">
           {petState.bubbleMessage}
         </div>
       )}
 
-      {/* 宠物动画 */}
-      <img
-        className="pet-animation"
-        src={gifSrc}
-        alt={petState.currentState}
-        draggable={false}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onMouseDown={handleMouseDown}
-      />
+      {/* 宠物在底部时（默认）：最后渲染宠物 */}
+      {(!isExpanded || petAtBottom) && (
+        <img
+          className="pet-animation"
+          src={gifSrc}
+          alt={petState.currentState}
+          draggable={false}
+          style={isExpanded ? { marginLeft: `${petOffsetX * 2}px` } : undefined}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onMouseDown={handleMouseDown}
+        />
+      )}
     </div>
   );
 };

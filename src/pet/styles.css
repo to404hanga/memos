@@ -24,6 +24,14 @@ html, body, #pet-root {
   justify-content: flex-end;
 }
 
+.pet-container.pet-top {
+  justify-content: flex-start;
+}
+
+.pet-container.pet-top .pet-animation {
+  order: -1;
+}
+
 .pet-animation {
   width: 120px;
   height: 120px;

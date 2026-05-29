@@ -55,37 +55,110 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
 
   // ==================== 对话框开关（调整窗口大小） ====================
 
+  // 记录扩展前的宠物位置，关闭时精确恢复
+  let petPosBeforeExpand: { x: number; y: number } | null = null;
+
   ipcMain.on('pet:open-chat-dialog', (_e, size?: { width: number; height: number }) => {
     if (petWindow && !petWindow.isDestroyed()) {
       const target = size || PET_WINDOW_CHAT;
-      const [x, y] = petWindow.getPosition();
-      const dy = target.height - PET_WINDOW_NORMAL.height;
-      const dx = (target.width - PET_WINDOW_NORMAL.width) / 2;
+      const [px, py] = petWindow.getPosition();
+
+      // 记录扩展前宠物位置
+      petPosBeforeExpand = { x: px, y: py };
+
+      // 获取宠物当前所在屏幕的工作区
+      const display = screen.getDisplayNearestPoint({ x: px + PET_WINDOW_NORMAL.width / 2, y: py + PET_WINDOW_NORMAL.height / 2 });
+      const wa = display.workArea;
+
+      // 宠物图片（120x120）在正常窗口（200x200）中的屏幕绝对位置：
+      // 水平：居中 → 宠物中心 X = px + 100
+      // 垂直：flex-end → 宠物中心 Y = py + 200 - 60 = py + 140
+      const PET_IMG = 120;
+      const petScreenCenterX = px + PET_WINDOW_NORMAL.width / 2;
+      const petScreenCenterY = py + PET_WINDOW_NORMAL.height - PET_IMG / 2;
+
+      // 判断方向
+      const screenCenterY = wa.y + wa.height / 2;
+      const petAtBottom = petScreenCenterY > screenCenterY;
+
+      // 水平：以宠物中心为锚点
+      let newX = petScreenCenterX - target.width / 2;
+
+      // 垂直：确保宠物图片位置不变
+      let newY: number;
+      if (petAtBottom) {
+        // 宠物在窗口底部：宠物中心 = newY + targetH - PET_IMG/2
+        newY = petScreenCenterY + PET_IMG / 2 - target.height;
+      } else {
+        // 宠物在窗口顶部：宠物中心 = newY + PET_IMG/2
+        newY = petScreenCenterY - PET_IMG / 2;
+      }
+
+      // 垂直方向确保不超出屏幕
+      newY = Math.max(wa.y, Math.min(newY, wa.y + wa.height - target.height));
+      // 水平方向确保不超出屏幕
+      newX = Math.max(wa.x, Math.min(newX, wa.x + wa.width - target.width));
+
+      // 计算宠物图片在新窗口中的水平偏移（让宠物视觉不动）
+      // 宠物中心在新窗口中的相对 X = petScreenCenterX - newX
+      const petOffsetX = petScreenCenterX - newX - target.width / 2;
+
       petWindow.setBounds({
-        x: Math.round(x - dx),
-        y: y - dy,
+        x: Math.round(newX),
+        y: Math.round(newY),
         width: target.width,
         height: target.height,
       });
       petWindow.setIgnoreMouseEvents(false);
       petWindow.setFocusable(true);
       petWindow.focus();
+
+      // 通知渲染进程宠物布局信息
+      expandLayout = { petAtBottom, petOffsetX };
+      petWindow.webContents.send('pet:layout-direction', { petAtBottom, petOffsetX });
     }
   });
 
+  // 记录展开时的布局参数
+  let expandLayout: { petAtBottom: boolean; petOffsetX: number } | null = null;
+
   ipcMain.on('pet:close-chat-dialog', () => {
     if (petWindow && !petWindow.isDestroyed()) {
-      const [x, y] = petWindow.getPosition();
+      const [wx, wy] = petWindow.getPosition();
       const [curW, curH] = petWindow.getSize();
-      // 用当前实际尺寸计算偏移，收缩回原始大小
-      const dy = curH - PET_WINDOW_NORMAL.height;
-      const dx = (curW - PET_WINDOW_NORMAL.width) / 2;
+      const PET_IMG = 120;
+
+      // 根据当前窗口位置 + 布局信息，反算宠物的屏幕位置
+      let petX: number;
+      let petY: number;
+
+      if (expandLayout) {
+        // 宠物中心 X = wx + curW/2 + petOffsetX
+        const petCenterX = wx + curW / 2 + expandLayout.petOffsetX;
+        petX = petCenterX - PET_WINDOW_NORMAL.width / 2;
+
+        if (expandLayout.petAtBottom) {
+          // 宠物底边 = wy + curH
+          petY = wy + curH - PET_WINDOW_NORMAL.height;
+        } else {
+          // 宠物顶边 = wy
+          petY = wy;
+        }
+      } else {
+        // fallback
+        petX = wx + (curW - PET_WINDOW_NORMAL.width) / 2;
+        petY = wy + curH - PET_WINDOW_NORMAL.height;
+      }
+
       petWindow.setBounds({
-        x: Math.round(x + dx),
-        y: y + dy,
+        x: Math.round(petX),
+        y: Math.round(petY),
         width: PET_WINDOW_NORMAL.width,
         height: PET_WINDOW_NORMAL.height,
       });
+
+      petPosBeforeExpand = null;
+      expandLayout = null;
       petWindow.setFocusable(false);
       petWindow.setIgnoreMouseEvents(true, { forward: true });
     }

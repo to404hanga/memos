@@ -67,6 +67,13 @@ contextBridge.exposeInMainWorld('petApi', {
   openChatDialog: (size) => ipcRenderer.send('pet:open-chat-dialog', size),
   closeChatDialog: () => ipcRenderer.send('pet:close-chat-dialog'),
 
+  // 布局方向（宠物在窗口顶部还是底部）
+  onLayoutDirection: (callback) => {
+    const handler = (_, data) => callback(data);
+    ipcRenderer.on('pet:layout-direction', handler);
+    return () => ipcRenderer.removeListener('pet:layout-direction', handler);
+  },
+
   // Agent 状态
   setAgentState: (state) => ipcRenderer.send('pet:set-agent-state', state),
 
