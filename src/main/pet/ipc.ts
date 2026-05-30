@@ -14,11 +14,15 @@ const PET_WINDOW_NORMAL = { width: 200, height: 200 };
 const PET_WINDOW_CHAT = { width: 420, height: 600 };
 
 export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateMachine, mainWindow: BrowserWindow | null): void {
+  // 拖拽时的运动方向（'running_left' | 'running_right' | null）
+  let dragRunState: PetState | null = null;
+
   // 开始拖拽：取消鼠标穿透
   ipcMain.on('pet:start-drag', () => {
     if (petWindow && !petWindow.isDestroyed()) {
       petWindow.setIgnoreMouseEvents(false);
     }
+    dragRunState = null;
   });
 
   // 移动窗口
@@ -26,6 +30,16 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
     if (petWindow && !petWindow.isDestroyed()) {
       const [x, y] = petWindow.getPosition();
       petWindow.setPosition(x + dx, y + dy);
+
+      // 根据水平运动分量播放运动动画（纯垂直拖动保持当前方向）
+      let nextRunState: PetState | null = null;
+      if (dx < 0) nextRunState = 'running_left';
+      else if (dx > 0) nextRunState = 'running_right';
+
+      if (nextRunState && nextRunState !== dragRunState) {
+        dragRunState = nextRunState;
+        stateMachine.transition(nextRunState);
+      }
     }
   });
 
@@ -39,6 +53,14 @@ export function registerPetIpc(petWindow: BrowserWindow, stateMachine: PetStateM
       setSetting('pet_position_y', String(y));
       const display = screen.getDisplayNearestPoint({ x, y });
       setSetting('pet_display_id', String(display.id));
+    }
+
+    // 拖拽结束：若处于拖拽运动状态，回到 idle
+    if (dragRunState) {
+      dragRunState = null;
+      if (stateMachine.getState().currentState.startsWith('running_')) {
+        stateMachine.transition('idle');
+      }
     }
   });
 
